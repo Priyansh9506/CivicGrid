@@ -1,32 +1,31 @@
 <!--
-    Practical - 3: CivicGrid — Area-Wise Task Manager
-    Description: A responsive civic task management UI demonstrating
-                 viewport meta tag, responsive images with <picture>,
-                 vw-based typography, max-width constraints, flexbox layout,
-                 and media-query breakpoints for mobile-first design.
+    Practical - 4: CivicGrid — Area-Wise Task Manager + Kanban Board
+    Description: Extends the Practical-3 task manager with three HTML5 APIs:
+                 I.   Geolocation API — detect user's current location
+                 II.  Local Storage API — persist tasks across sessions
+                 III. Drag and Drop API — Kanban board view with draggable cards
 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- I. The viewport meta tag for responsive design -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CivicGrid - Area-Wise Task Manager</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #f97316; /* Orange */
-            --primary-hover: #ea580c; /* Darker orange */
-            --bg-color: #fdf6e3; /* Light beige */
+            --primary: #f97316;
+            --primary-hover: #ea580c;
+            --bg-color: #fdf6e3;
             --card-bg: #ffffff;
-            --text-main: #334155; /* Dark gray for readability */
+            --text-main: #334155;
             --text-muted: #64748b;
             --border-color: #e2e8f0;
         }
         
         body {
             font-family: 'Inter', sans-serif;
-            background: var(--bg-color); /* Flat color, no gradient */
+            background: var(--bg-color);
             color: var(--text-main);
             min-height: 100vh;
             margin: 0;
@@ -34,22 +33,20 @@
             justify-content: center;
             padding: 40px 20px;
             box-sizing: border-box;
-            user-select: none; /* Prevents text cursor on static text */
+            user-select: none;
             -webkit-user-select: none;
         }
 
         .container {
-            /* II. Using width and max-width properties */
             width: 100%;
-            max-width: 900px;
+            max-width: 1100px;
             background: var(--card-bg);
             border-radius: 24px;
             border: 1px solid var(--border-color);
             padding: 40px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05); /* Softer shadow for light UI */
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
         }
 
-        /* II. Changing images according to browser width and using max-width */
         .responsive-banner img {
             width: 100%;
             max-width: 800px;
@@ -61,37 +58,123 @@
 
         h1 {
             text-align: center;
-            /* III. Responsive text size using "vw" */
-            font-size: 5vw; 
+            font-size: 5vw;
             margin-bottom: 10px;
-            color: var(--primary); /* Flat orange, no gradient */
+            color: var(--primary);
         }
 
         p.subtitle {
             text-align: center;
             color: var(--text-muted);
-            margin-bottom: 40px;
+            margin-bottom: 24px;
         }
 
+        /* ── I. Geolocation — Location Bar ── */
+        .location-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+
+        .btn-location {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #fff7ed;
+            border: 1px solid #fdba74;
+            border-radius: 50px;
+            padding: 10px 20px;
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: #c2410c;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+
+        .btn-location:hover {
+            background: #ffedd5;
+            border-color: var(--primary);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
+        }
+
+        .btn-location .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .btn-location.detecting .pulse-dot {
+            background: var(--primary);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50%      { opacity: 0.4; transform: scale(1.5); }
+        }
+
+        /* ── View Toggle ── */
+        .view-toggle {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            margin-bottom: 28px;
+        }
+
+        .view-toggle button {
+            padding: 10px 24px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            font-family: inherit;
+            border: 1px solid var(--border-color);
+            background: #ffffff;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .view-toggle button:first-child {
+            border-radius: 10px 0 0 10px;
+        }
+
+        .view-toggle button:last-child {
+            border-radius: 0 10px 10px 0;
+            border-left: none;
+        }
+
+        .view-toggle button.active {
+            background: var(--primary);
+            color: #ffffff;
+            border-color: var(--primary);
+        }
+
+        .view-toggle button:not(.active):hover {
+            background: #fff7ed;
+            color: var(--primary);
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* ── Input Section ── */
         .input-section {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
             gap: 15px;
-            margin-bottom: 40px;
-            background: #fff7ed; /* Very light orange */
+            margin-bottom: 32px;
+            background: #fff7ed;
             padding: 20px;
             border-radius: 16px;
-            border: 1px solid #fdba74; /* Light orange border */
+            border: 1px solid #fdba74;
         }
         
-        .input-section > * {
-            flex: 1 1 200px;
-        }
-        
-        .input-section button {
-            flex: 0 0 auto;
-        }
+        .input-section > * { flex: 1 1 200px; }
+        .input-section button { flex: 0 0 auto; }
 
         input, select, button {
             font-family: 'Inter', sans-serif;
@@ -158,6 +241,9 @@
             box-shadow: 0 4px 6px -1px rgba(249, 115, 22, 0.3);
         }
 
+        /* ============================================
+           LIST VIEW (original Practical-3 design)
+           ============================================ */
         .area-section {
             margin-bottom: 30px;
         }
@@ -224,7 +310,8 @@
 
         .task-meta {
             display: flex;
-            gap: 10px;
+            flex-wrap: wrap;
+            gap: 8px;
             font-size: 0.85rem;
         }
 
@@ -234,6 +321,12 @@
             padding: 4px 10px;
             border-radius: 20px;
             font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        .tag-location {
+            background: #f3e8ff;
+            color: #7c3aed;
         }
 
         .completed .task-title {
@@ -278,14 +371,227 @@
             color: white;
         }
 
-        /* IV. Media queries for breakpoints */
+        /* ============================================
+           III. KANBAN VIEW — Drag and Drop Board
+           ============================================ */
+        .kanban-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            min-height: 350px;
+        }
+
+        .kanban-column {
+            background: #fafbfc;
+            border: 2px dashed var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            min-height: 300px;
+            transition: all 0.3s ease;
+        }
+
+        .kanban-column.drag-over {
+            border-color: var(--primary);
+            border-style: solid;
+            background: #fff7ed;
+            box-shadow: inset 0 0 20px rgba(249, 115, 22, 0.08);
+        }
+
+        .column-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .column-header h3 {
+            font-size: 0.92rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin: 0;
+        }
+
+        .column-count {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 2px 10px;
+            border-radius: 50px;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        /* Column colors */
+        .col-reported .column-header h3 { color: #3b82f6; }
+        .col-reported .column-count { background: #dbeafe; color: #2563eb; }
+        .col-reported .column-header { border-color: #bfdbfe; }
+        .col-reported.drag-over { border-color: #3b82f6; background: #eff6ff; }
+
+        .col-inprogress .column-header h3 { color: var(--primary); }
+        .col-inprogress .column-count { background: #ffedd5; color: #ea580c; }
+        .col-inprogress .column-header { border-color: #fed7aa; }
+
+        .col-resolved .column-header h3 { color: #16a34a; }
+        .col-resolved .column-count { background: #dcfce7; color: #16a34a; }
+        .col-resolved .column-header { border-color: #bbf7d0; }
+        .col-resolved.drag-over { border-color: #22c55e; background: #f0fdf4; }
+
+        .card-list {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Kanban Task Card */
+        .kanban-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 14px 16px;
+            cursor: grab;
+            transition: all 0.25s ease;
+            position: relative;
+            user-select: none;
+        }
+
+        .kanban-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+            border-color: #cbd5e1;
+        }
+
+        .kanban-card:active { cursor: grabbing; }
+
+        .kanban-card.dragging {
+            opacity: 0.35;
+            transform: rotate(2deg) scale(0.95);
+        }
+
+        .kanban-card .drag-handle {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            color: #cbd5e1;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .kanban-card:hover .drag-handle { opacity: 1; }
+
+        .kanban-card .card-title {
+            font-size: 0.88rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+            padding-right: 24px;
+            line-height: 1.35;
+        }
+
+        .kanban-card .card-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+
+        .kanban-card .card-tags .tag {
+            font-size: 0.68rem;
+            padding: 3px 8px;
+        }
+
+        .kanban-card .card-image {
+            width: 100%;
+            max-height: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .kanban-card .card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .kanban-card .card-time {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .kanban-card .btn-card-delete {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.78rem;
+            padding: 3px 6px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .kanban-card .btn-card-delete:hover {
+            background: #fee2e2;
+            color: #dc2626;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .col-resolved .kanban-card { opacity: 0.65; }
+        .col-resolved .kanban-card:hover { opacity: 1; }
+        .col-resolved .card-title { text-decoration: line-through; color: var(--text-muted); }
+
+        .kanban-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-style: italic;
+            border: 2px dashed var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            min-height: 60px;
+        }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--primary);
+            padding: 14px 22px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            color: var(--text-main);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(16px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ── Responsive ── */
         @media (max-width: 768px) {
-            .input-section > * {
-                flex: 1 1 100%;
-            }
-            .input-section button {
-                width: 100%;
-            }
+            .input-section > * { flex: 1 1 100%; }
+            .input-section button { width: 100%; }
             li {
                 flex-direction: column;
                 align-items: flex-start;
@@ -295,25 +601,22 @@
                 width: 100%;
                 justify-content: flex-end;
             }
-            h1 {
-                font-size: 6vw; /* Adjusting vw on breakpoint */
+            h1 { font-size: 6vw; }
+            .kanban-board {
+                grid-template-columns: 1fr;
             }
+            .kanban-column { min-height: 180px; }
         }
         
-        /* Additional breakpoint to show multiple media queries */
         @media (max-width: 480px) {
-            h1 {
-                font-size: 8vw;
-            }
-            .container {
-                padding: 20px;
-            }
+            h1 { font-size: 8vw; }
+            .container { padding: 20px; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- II. Picture element to change image based on browser width -->
+        <!-- Responsive banner -->
         <picture class="responsive-banner">
             <source media="(max-width: 600px)" srcset="https://via.placeholder.com/600x300/f97316/FFFFFF?text=CivicGrid+Mobile">
             <img src="https://via.placeholder.com/1200x400/f97316/FFFFFF?text=CivicGrid+Desktop" alt="CivicGrid Banner">
@@ -322,6 +625,21 @@
         <h1>CivicGrid</h1>
         <p class="subtitle">Area-Wise Task Management for Civic Authorities</p>
 
+        <!-- I. Geolocation API — Button to detect user's current location -->
+        <div class="location-bar">
+            <button class="btn-location" id="locationBtn" onclick="detectLocation()">
+                <span class="pulse-dot"></span>
+                <span id="locationText">📍 Detect My Location</span>
+            </button>
+        </div>
+
+        <!-- View Toggle: List ↔ Kanban -->
+        <div class="view-toggle">
+            <button id="btnListView" class="active" onclick="switchView('list')">📋 List View</button>
+            <button id="btnKanbanView" onclick="switchView('kanban')">🗂️ Kanban Board</button>
+        </div>
+
+        <!-- Input Section -->
         <div class="input-section">
             <input type="text" id="taskInput" placeholder="Describe the civic issue (e.g., Pothole repair needed)...">
             <select id="areaInput">
@@ -332,17 +650,29 @@
                 <option value="West Zone">West Zone</option>
                 <option value="Downtown">Downtown</option>
             </select>
-
             <input type="file" id="imageInput" accept="image/*">
-
             <button onclick="addTask()">Add Task</button>
         </div>
 
-        <div id="tasksContainer">
-            <!-- Tasks grouped by area will be injected here by app.js -->
+        <!-- LIST VIEW container (original design) -->
+        <div id="listView">
+            <div id="tasksContainer">
+                <!-- Tasks grouped by area injected here -->
+            </div>
+        </div>
+
+        <!-- III. Drag and Drop API — KANBAN VIEW container -->
+        <div id="kanbanView" style="display: none;">
+            <div class="kanban-board" id="kanbanBoard">
+                <!-- 3 columns injected by app.js -->
+            </div>
         </div>
     </div>
 
+    <!-- Toast notification -->
+    <div class="toast" id="toast"></div>
+
+    <!-- II. Local Storage API — Script loads/saves tasks from localStorage -->
     <script src="app.js"></script>
 </body>
 </html>
