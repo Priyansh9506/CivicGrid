@@ -16,16 +16,30 @@ const KANBAN_COLUMNS = [
 
 // Default sample tasks (same as Practical-3 with added status & location)
 const DEFAULT_TASKS = [
-    { id: 1, text: "Repair main water pipe leak", area: "Downtown", completed: false, status: "reported", location: null, image: null, createdAt: Date.now() - 86400000 },
-    { id: 2, text: "Fix streetlights on 5th Avenue", area: "North Zone", completed: false, status: "inprogress", location: null, image: null, createdAt: Date.now() - 43200000 },
-    { id: 3, text: "Clear garbage dump near park", area: "South Zone", completed: true, status: "resolved", location: null, image: null, createdAt: Date.now() - 172800000 },
-    { id: 4, text: "Fill potholes on Highway 9", area: "East Zone", completed: false, status: "reported", location: null, image: null, createdAt: Date.now() - 3600000 }
+    { id: 1, text: "Repair main water pipe leak", area: "Downtown", completed: false, status: "reported", location: "Downtown", coords: { lat: 23.0257, lng: 72.5786 }, image: null, createdAt: Date.now() - 86400000 },
+    { id: 2, text: "Fix streetlights on 5th Avenue", area: "North Zone", completed: false, status: "inprogress", location: "North Zone", coords: { lat: 23.0784, lng: 72.5998 }, image: null, createdAt: Date.now() - 43200000 },
+    { id: 3, text: "Clear garbage dump near park", area: "South Zone", completed: true, status: "resolved", location: "South Zone", coords: { lat: 22.9904, lng: 72.5936 }, image: null, createdAt: Date.now() - 172800000 },
+    { id: 4, text: "Fill potholes on Highway 9", area: "East Zone", completed: false, status: "reported", location: "East Zone", coords: { lat: 23.0334, lng: 72.6324 }, image: null, createdAt: Date.now() - 3600000 }
 ];
 
 // ── State ──
 let tasks = [];
 let userLocation = null;
+let userCoords = null;
 let currentView = 'list'; // 'list' or 'kanban'
+
+// Leaflet state variables
+let map = null;
+let selectedMarker = null;
+let taskMarkers = [];
+
+const ZONE_COORDS = {
+    "North Zone": { lat: 23.0784, lng: 72.5998 },
+    "South Zone": { lat: 22.9904, lng: 72.5936 },
+    "East Zone": { lat: 23.0334, lng: 72.6324 },
+    "West Zone": { lat: 23.0366, lng: 72.5456 },
+    "Downtown": { lat: 23.0257, lng: 72.5786 }
+};
 
 // =======================================================
 // II. LOCAL STORAGE API — Load and Save Tasks
@@ -37,12 +51,13 @@ function loadTasks() {
     if (saved) {
         try {
             tasks = JSON.parse(saved);
-            // Migrate old tasks that lack status/createdAt
+            // Migrate old tasks that lack status/createdAt/coords
             tasks = tasks.map(t => ({
                 ...t,
                 status: t.status || (t.completed ? 'resolved' : 'reported'),
                 createdAt: t.createdAt || Date.now(),
-                location: t.location || null
+                location: t.location || null,
+                coords: t.coords || (ZONE_COORDS[t.area] || null)
             }));
         } catch (e) {
             console.warn('Failed to parse saved tasks, using defaults.');
@@ -57,6 +72,185 @@ function loadTasks() {
 function saveTasks() {
     // II. Persist tasks to Local Storage
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+}
+
+// =======================================================
+// I. GEOLOCATION API — Detect User's Location
+// =======================================================
+
+// =======================================================
+// MAP INTEGRATION — Initialize Map, Handle Clicks & Markers
+// =======================================================
+
+function initMap() {
+    // Initialize map centered at default coordinates (Ahmedabad)
+    const defaultCenter = [23.0225, 72.5714];
+    map = L.map('map').setView(defaultCenter, 12);
+
+    // Add OpenStreetMap tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Handle map clicks to place a selection pin manually
+    map.on('click', async (e) => {
+        const { lat, lng } = e.latlng;
+        userCoords = { lat, lng };
+        placeSelectionPin(lat, lng);
+        await updateAddressFromCoords(lat, lng);
+    });
+}
+
+function getSelectionIcon() {
+    return L.divIcon({
+        html: `<div style="position: relative; width: 24px; height: 24px;">
+            <div style="
+                background-color: #ef4444; 
+                border: 2px solid #ffffff; 
+                width: 16px; 
+                height: 16px; 
+                border-radius: 50%; 
+                box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+                position: absolute;
+                top: 4px;
+                left: 4px;
+                z-index: 2;
+            "></div>
+            <div style="
+                background-color: #ef4444;
+                opacity: 0.4;
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                animation: pulse 1.5s infinite ease-in-out;
+                position: absolute;
+                top: 0;
+                left: 0;
+                z-index: 1;
+            "></div>
+        </div>`,
+        className: 'custom-selection-marker',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+function getMarkerIcon(status) {
+    let color;
+    switch (status) {
+        case 'resolved': color = '#16a34a'; break; // green
+        case 'inprogress': color = '#f97316'; break; // orange
+        case 'reported':
+        default: color = '#3b82f6'; break; // blue
+    }
+    
+    return L.divIcon({
+        html: `<div style="
+            background-color: ${color}; 
+            border: 2px solid #ffffff; 
+            width: 16px; 
+            height: 16px; 
+            border-radius: 50%; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            display: inline-block;
+        "></div>`,
+        className: 'custom-task-marker',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+    });
+}
+
+function placeSelectionPin(lat, lng) {
+    if (selectedMarker) {
+        selectedMarker.setLatLng([lat, lng]);
+    } else {
+        selectedMarker = L.marker([lat, lng], { icon: getSelectionIcon() }).addTo(map);
+    }
+}
+
+async function updateAddressFromCoords(lat, lng) {
+    const textEl = document.getElementById('locationText');
+    const btn = document.getElementById('locationBtn');
+    
+    btn.classList.add('detecting');
+    textEl.textContent = '⏳ Reverse geocoding…';
+
+    try {
+        const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+        );
+        const data = await res.json();
+        if (data && data.address) {
+            const addr = data.address;
+            const readable = addr.suburb || addr.neighbourhood || addr.city_district || addr.city || addr.town || addr.state || 'Selected Point';
+            userLocation = readable;
+        } else {
+            userLocation = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        }
+    } catch (err) {
+        console.warn('Reverse geocode failed, using coordinates.');
+        userLocation = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    }
+
+    textEl.textContent = `📍 ${userLocation}`;
+    btn.classList.remove('detecting');
+    showToast(`📍 Selected: ${userLocation}`);
+}
+
+function renderMapMarkers() {
+    if (!map) return;
+
+    // Clear existing task markers from the map
+    taskMarkers.forEach(m => map.removeLayer(m));
+    taskMarkers = [];
+
+    // Filter tasks that have coordinates and render them
+    tasks.forEach(task => {
+        if (task.coords && task.coords.lat && task.coords.lng) {
+            const marker = L.marker([task.coords.lat, task.coords.lng], {
+                icon: getMarkerIcon(task.status)
+            });
+
+            // Create a premium looking popup card
+            let imageTag = '';
+            if (task.image) {
+                imageTag = `<img src="${task.image}" class="popup-img" alt="Task photo">`;
+            }
+
+            let statusBadgeColor;
+            let statusLabel;
+            if (task.status === 'resolved') {
+                statusBadgeColor = '#dcfce7';
+                statusLabel = 'Resolved';
+            } else if (task.status === 'inprogress') {
+                statusBadgeColor = '#ffedd5';
+                statusLabel = 'In Progress';
+            } else {
+                statusBadgeColor = '#dbeafe';
+                statusLabel = 'Reported';
+            }
+
+            const popupContent = `
+                <div style="min-width: 180px; max-width: 240px; font-family: 'Inter', sans-serif;">
+                    <h4 class="popup-title" style="margin: 0 0 6px 0; font-size: 0.95rem; color: var(--text-main); font-weight:600;">${task.text}</h4>
+                    <p style="margin: 2px 0; font-size: 0.8rem; color: var(--text-muted)">
+                        <strong>Area:</strong> ${task.area}
+                    </p>
+                    <div class="popup-meta" style="display: flex; gap: 6px; margin-top: 6px;">
+                        <span class="tag" style="background: ${statusBadgeColor}; color: var(--text-main); font-size: 0.7rem; padding: 2px 6px;">
+                            ${statusLabel}
+                        </span>
+                        ${task.location ? `<span class="tag tag-location" style="font-size: 0.7rem; padding: 2px 6px;">🌐 ${task.location}</span>` : ''}
+                    </div>
+                    ${imageTag}
+                </div>
+            `;
+
+            marker.bindPopup(popupContent);
+            marker.addTo(map);
+            taskMarkers.push(marker);
+        }
+    });
 }
 
 // =======================================================
@@ -80,7 +274,13 @@ function detectLocation() {
     navigator.geolocation.getCurrentPosition(
         async (position) => {
             const { latitude, longitude } = position.coords;
-            userLocation = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+            userCoords = { lat: latitude, lng: longitude };
+
+            // Center map on user location and drop selection pin
+            if (map) {
+                map.setView([latitude, longitude], 14);
+                placeSelectionPin(latitude, longitude);
+            }
 
             // Reverse geocode via free Nominatim API
             try {
@@ -92,9 +292,12 @@ function detectLocation() {
                     const addr = data.address;
                     const readable = addr.suburb || addr.neighbourhood || addr.city_district || addr.city || addr.town || addr.state || 'Detected';
                     userLocation = readable;
+                } else {
+                    userLocation = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
                 }
             } catch (err) {
                 console.warn('Reverse geocode failed, using raw coordinates.');
+                userLocation = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
             }
 
             textEl.textContent = `📍 ${userLocation}`;
@@ -164,7 +367,8 @@ function createTaskObject(text, area, imageDataUrl) {
         image: imageDataUrl,
         completed: false,
         status: 'reported',
-        location: userLocation,  // I. Attach detected location
+        location: userLocation || area,  // Attach detected location or default area name
+        coords: userCoords ? { ...userCoords } : (ZONE_COORDS[area] || null),
         createdAt: Date.now()
     };
     tasks.push(newTask);
@@ -172,6 +376,15 @@ function createTaskObject(text, area, imageDataUrl) {
 
     document.getElementById('taskInput').value = '';
     document.getElementById('areaInput').value = '';
+
+    // Reset location selection
+    userCoords = null;
+    userLocation = null;
+    if (selectedMarker) {
+        map.removeLayer(selectedMarker);
+        selectedMarker = null;
+    }
+    document.getElementById('locationText').textContent = '📍 Detect My Location';
 
     render();
     showToast('✅ Task added!');
@@ -466,6 +679,7 @@ function render() {
     } else {
         renderKanbanView();
     }
+    renderMapMarkers();
 }
 
 // Alias for backward compat (used by old toggleTask/removeTask calls)
@@ -498,4 +712,5 @@ function showToast(msg) {
 // =======================================================
 
 loadTasks();   // II. Load persisted tasks
+initMap();     // Initialize Leaflet map
 render();
