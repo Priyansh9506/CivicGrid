@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CivicGrid Student Member Registration</title>
+    <!-- Using Offline Bootstrap CSS -->
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom styling for CivicGrid theme -->
+    <style>
+        body {
+            background-color: #f4f7f6;
+        }
+        .registration-card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .brand-header {
+            background-color: #0d6efd;
+            color: #fff;
+            border-radius: 10px 10px 0 0;
+            padding: 20px;
+        }
+        .form-label {
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5 mb-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="card registration-card">
+                    <div class="card-header brand-header text-center">
+                        <h2>CivicGrid</h2>
+                        <p class="mb-0">Student Volunteer Registration</p>
+                    </div>
+                    <div class="card-body p-4">
+                        <form id="registrationForm">
+                            
+                            <!-- Roll Number -->
+                            <div class="mb-3">
+                                <label for="rollNumber" class="form-label">Roll Number</label>
+                                <input type="text" class="form-control" id="rollNumber" placeholder="Enter your roll number" required>
+                            </div>
+                            
+                            <!-- First Name -->
+                            <div class="mb-3">
+                                <label for="firstName" class="form-label">First Name</label>
+                                <input type="text" class="form-control" id="firstName" placeholder="Enter your first name" required>
+                            </div>
+                            
+                            <!-- Mobile Number -->
+                            <div class="mb-3">
+                                <label for="mobileNumber" class="form-label">Mobile Number</label>
+                                <input type="tel" class="form-control" id="mobileNumber" placeholder="Enter your mobile number" pattern="[0-9]{10}" required>
+                                <div class="form-text">Format: 10 digit number.</div>
+                            </div>
+                            
+                            <!-- Email ID -->
+                            <div class="mb-3">
+                                <label for="emailId" class="form-label">Email ID</label>
+                                <input type="email" class="form-control" id="emailId" placeholder="Enter your email address" required>
+                            </div>
+                            
+                            <!-- Address -->
+                            <div class="mb-4">
+                                <label for="address" class="form-label">Address</label>
+                                <textarea class="form-control" id="address" rows="3" placeholder="Enter your residential address" required></textarea>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary btn-lg">Register for CivicGrid</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Using Offline Bootstrap JS -->
+    <script src="js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Simple form submission prevention for demonstration purposes
+        document.getElementById('registrationForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('Registration Successful! Welcome to CivicGrid.');
+            this.reset();
+        });
+    </script>
+</body>
+</html>

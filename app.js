@@ -236,6 +236,12 @@ function renderMapMarkers() {
                     <p style="margin: 2px 0; font-size: 0.8rem; color: var(--text-muted)">
                         <strong>Area:</strong> ${task.area}
                     </p>
+                    ${task.reporterDetails ? `
+                    <p style="margin: 4px 0; font-size: 0.75rem; color: var(--text-muted); background: #f8fafc; padding: 6px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <strong>Reporter:</strong> ${task.reporterDetails.name} (${task.reporterDetails.gender}, ${task.reporterDetails.age})<br>
+                        <strong>Aadhar:</strong> ${task.reporterDetails.aadhar}<br>
+                        <strong>Residence:</strong> ${task.reporterDetails.residence}
+                    </p>` : ''}
                     <div class="popup-meta" style="display: flex; gap: 6px; margin-top: 6px;">
                         <span class="tag" style="background: ${statusBadgeColor}; color: var(--text-main); font-size: 0.7rem; padding: 2px 6px;">
                             ${statusLabel}
@@ -338,32 +344,46 @@ function addTask() {
     const areaInput = document.getElementById('areaInput');
     const imageInput = document.getElementById('imageInput');
 
+    const reporterName = document.getElementById('reporterName');
+    const reporterAadhar = document.getElementById('reporterAadhar');
+    const reporterAge = document.getElementById('reporterAge');
+    const reporterGender = document.getElementById('reporterGender');
+    const reporterResidence = document.getElementById('reporterResidence');
+
     const text = input.value.trim();
     const area = areaInput.value;
+    const name = reporterName.value.trim();
+    const aadhar = reporterAadhar.value.trim();
+    const age = reporterAge.value.trim();
+    const gender = reporterGender.value;
+    const residence = reporterResidence.value.trim();
 
-    if (!text || !area) {
-        showToast('⚠️ Please fill in task description and area.');
+    if (!text || !area || !name || !aadhar || !age || !gender || !residence) {
+        showToast('⚠️ Please fill in all reporter and issue details.');
         return;
     }
+
+    const reporterDetails = { name, aadhar, age, gender, residence };
 
     const file = imageInput.files[0];
     if (file) {
         const reader = new FileReader();
         reader.onload = function (e) {
-            createTaskObject(text, area, e.target.result);
+            createTaskObject(text, area, reporterDetails, e.target.result);
             imageInput.value = '';
         };
         reader.readAsDataURL(file);
     } else {
-        createTaskObject(text, area, null);
+        createTaskObject(text, area, reporterDetails, null);
     }
 }
 
-function createTaskObject(text, area, imageDataUrl) {
+function createTaskObject(text, area, reporterDetails, imageDataUrl) {
     const newTask = {
         id: Date.now(),
         text: text,
         area: area,
+        reporterDetails: reporterDetails,
         image: imageDataUrl,
         completed: false,
         status: 'reported',
@@ -376,6 +396,11 @@ function createTaskObject(text, area, imageDataUrl) {
 
     document.getElementById('taskInput').value = '';
     document.getElementById('areaInput').value = '';
+    document.getElementById('reporterName').value = '';
+    document.getElementById('reporterAadhar').value = '';
+    document.getElementById('reporterAge').value = '';
+    document.getElementById('reporterGender').value = '';
+    document.getElementById('reporterResidence').value = '';
 
     // Reset location selection
     userCoords = null;
@@ -463,7 +488,6 @@ function renderListView() {
             areaTag.textContent = `📍 ${task.area}`;
             meta.appendChild(areaTag);
 
-            // Show location tag if available
             if (task.location) {
                 const locTag = document.createElement('span');
                 locTag.className = 'tag tag-location';
@@ -473,6 +497,15 @@ function renderListView() {
 
             taskContent.appendChild(title);
             taskContent.appendChild(meta);
+
+            if (task.reporterDetails) {
+                const reporterInfo = document.createElement('div');
+                reporterInfo.style.fontSize = '0.8rem';
+                reporterInfo.style.color = 'var(--text-muted)';
+                reporterInfo.style.marginTop = '4px';
+                reporterInfo.innerHTML = `<strong>Reported by:</strong> ${task.reporterDetails.name} (Aadhar: ${task.reporterDetails.aadhar})`;
+                taskContent.appendChild(reporterInfo);
+            }
 
             if (task.image) {
                 const img = document.createElement('img');

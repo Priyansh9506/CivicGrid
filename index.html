@@ -164,8 +164,7 @@
         /* ── Input Section ── */
         .input-section {
             display: flex;
-            flex-wrap: wrap;
-            align-items: center;
+            flex-direction: column;
             gap: 15px;
             margin-bottom: 32px;
             background: #fff7ed;
@@ -174,8 +173,16 @@
             border: 1px solid #fdba74;
         }
         
-        .input-section > * { flex: 1 1 200px; }
-        .input-section button { flex: 0 0 auto; }
+        .input-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            width: 100%;
+        }
+
+        .input-row > * { flex: 1 1 200px; }
+        .input-row button { flex: 0 0 auto; }
+        .full-width { flex: 1 1 100% !important; }
 
         input, select, button {
             font-family: 'Inter', sans-serif;
@@ -698,17 +705,38 @@
 
         <!-- Input Section -->
         <div class="input-section">
-            <input type="text" id="taskInput" placeholder="Describe the civic issue (e.g., Pothole repair needed)...">
-            <select id="areaInput">
-                <option value="" disabled selected>Select Area</option>
-                <option value="North Zone">North Zone</option>
-                <option value="South Zone">South Zone</option>
-                <option value="East Zone">East Zone</option>
-                <option value="West Zone">West Zone</option>
-                <option value="Downtown">Downtown</option>
-            </select>
-            <input type="file" id="imageInput" accept="image/*">
-            <button onclick="addTask()">Add Task</button>
+            <h3 style="margin-top: 0; margin-bottom: 5px; font-size: 1.1rem; color: #c2410c;">Reporter Details</h3>
+            <div class="input-row">
+                <input type="text" id="reporterName" placeholder="Your Name" required>
+                <input type="text" id="reporterAadhar" placeholder="Aadhar Card No." required>
+                <input type="number" id="reporterAge" placeholder="Age" min="1" required>
+                <select id="reporterGender" required>
+                    <option value="" disabled selected>Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div class="input-row">
+                <input type="text" id="reporterResidence" placeholder="Residence Address" class="full-width" required>
+            </div>
+            
+            <h3 style="margin-top: 10px; margin-bottom: 5px; font-size: 1.1rem; color: #c2410c;">Issue Details</h3>
+            <div class="input-row">
+                <input type="text" id="taskInput" placeholder="Describe the civic issue (e.g., Pothole repair needed)..." class="full-width" required>
+            </div>
+            <div class="input-row">
+                <select id="areaInput" required>
+                    <option value="" disabled selected>Select Area</option>
+                    <option value="North Zone">North Zone</option>
+                    <option value="South Zone">South Zone</option>
+                    <option value="East Zone">East Zone</option>
+                    <option value="West Zone">West Zone</option>
+                    <option value="Downtown">Downtown</option>
+                </select>
+                <input type="file" id="imageInput" accept="image/*">
+                <button onclick="addTask()">Submit Complaint</button>
+            </div>
         </div>
 
         <!-- LIST VIEW container (original design) -->
