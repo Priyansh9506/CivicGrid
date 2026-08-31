@@ -684,6 +684,12 @@
         <h1>CivicGrid</h1>
         <p class="subtitle">Area-Wise Task Management for Civic Authorities</p>
 
+        <!-- User Session Header -->
+        <div id="userHeader" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 10px 20px; background: #fff7ed; border-radius: 12px; border: 1px solid #fdba74;">
+            <span id="welcomeMessage" style="font-weight: 600; color: var(--primary);">Welcome!</span>
+            <button onclick="signOut()" style="padding: 8px 16px; font-size: 0.9rem; background: #dc2626;">Sign Out</button>
+        </div>
+
         <!-- I. Geolocation API — Button to detect user's current location -->
         <div class="location-bar">
             <button class="btn-location" id="locationBtn" onclick="detectLocation()">
@@ -759,6 +765,30 @@
 
     <!-- Leaflet.js Library -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- User Session Logic -->
+    <script>
+        // Check session
+        const currentUser = JSON.parse(localStorage.getItem('civicgrid_currentUser'));
+        if (!currentUser) {
+            // Redirect to login if not authenticated
+            window.location.href = 'login.html';
+        } else {
+            document.getElementById('welcomeMessage').innerText = 'Welcome, ' + currentUser.firstName + ' (' + currentUser.emailId + ')!';
+            // Pre-fill reporter details if applicable
+            setTimeout(() => {
+                const nameInput = document.getElementById('reporterName');
+                const aadharInput = document.getElementById('reporterAadhar');
+                if(nameInput) nameInput.value = currentUser.firstName + ' ' + (currentUser.lastName || '');
+                if(aadharInput) aadharInput.value = currentUser.aadharNumber || '';
+            }, 500);
+        }
+
+        function signOut() {
+            localStorage.removeItem('civicgrid_currentUser');
+            window.location.href = 'login.html';
+        }
+    </script>
+
     <!-- II. Local Storage API — Script loads/saves tasks from localStorage -->
     <script src="app.js"></script>
 </body>

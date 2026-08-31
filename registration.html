@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CivicGrid Student Member Registration</title>
+    <title>CivicGrid Civilian Registration</title>
     <!-- Using Offline Bootstrap CSS -->
-    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet">
     <!-- Custom styling for CivicGrid theme -->
     <style>
         body {
@@ -34,21 +34,21 @@
                 <div class="card registration-card">
                     <div class="card-header brand-header text-center">
                         <h2>CivicGrid</h2>
-                        <p class="mb-0">Student Volunteer Registration</p>
+                        <p class="mb-0">Civilian Registration</p>
                     </div>
                     <div class="card-body p-4">
                         <form id="registrationForm">
-                            
-                            <!-- Roll Number -->
-                            <div class="mb-3">
-                                <label for="rollNumber" class="form-label">Roll Number</label>
-                                <input type="text" class="form-control" id="rollNumber" placeholder="Enter your roll number" required>
-                            </div>
                             
                             <!-- First Name -->
                             <div class="mb-3">
                                 <label for="firstName" class="form-label">First Name</label>
                                 <input type="text" class="form-control" id="firstName" placeholder="Enter your first name" required>
+                            </div>
+                            
+                            <!-- Last Name -->
+                            <div class="mb-3">
+                                <label for="lastName" class="form-label">Last Name</label>
+                                <input type="text" class="form-control" id="lastName" placeholder="Enter your last name" required>
                             </div>
                             
                             <!-- Mobile Number -->
@@ -58,10 +58,23 @@
                                 <div class="form-text">Format: 10 digit number.</div>
                             </div>
                             
+                            <!-- Aadhar Card Number -->
+                            <div class="mb-3">
+                                <label for="aadharNumber" class="form-label">Aadhar Card Number</label>
+                                <input type="text" class="form-control" id="aadharNumber" placeholder="Enter your 12-digit Aadhar number" pattern="[0-9]{12}" required>
+                                <div class="form-text">Format: 12 digit number.</div>
+                            </div>
+                            
                             <!-- Email ID -->
                             <div class="mb-3">
                                 <label for="emailId" class="form-label">Email ID</label>
                                 <input type="email" class="form-control" id="emailId" placeholder="Enter your email address" required>
+                            </div>
+                            
+                            <!-- Password -->
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="password" placeholder="Create a password" required>
                             </div>
                             
                             <!-- Address -->
@@ -70,8 +83,13 @@
                                 <textarea class="form-control" id="address" rows="3" placeholder="Enter your residential address" required></textarea>
                             </div>
                             
-                            <div class="d-grid gap-2">
+                            <div class="d-grid gap-2 mb-3">
                                 <button type="submit" class="btn btn-primary btn-lg">Register for CivicGrid</button>
+                            </div>
+                            
+                            <div class="text-center mt-3">
+                                <span class="text-muted">Already have an account?</span> 
+                                <a href="login.html" class="text-decoration-none">Sign in here</a>
                             </div>
                         </form>
                     </div>
@@ -81,13 +99,37 @@
     </div>
 
     <!-- Using Offline Bootstrap JS -->
-    <script src="js/bootstrap.bundle.min.js"></script>
+    <script src="bootstrap/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Simple form submission prevention for demonstration purposes
         document.getElementById('registrationForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            alert('Registration Successful! Welcome to CivicGrid.');
-            this.reset();
+            
+            // Collect user data
+            const user = {
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value,
+                mobileNumber: document.getElementById('mobileNumber').value,
+                aadharNumber: document.getElementById('aadharNumber').value,
+                emailId: document.getElementById('emailId').value,
+                password: document.getElementById('password').value,
+                address: document.getElementById('address').value
+            };
+            
+            // Get existing users from localStorage or initialize empty array
+            let users = JSON.parse(localStorage.getItem('civicgrid_users')) || [];
+            
+            // Check if email already exists
+            if (users.find(u => u.emailId === user.emailId)) {
+                alert('User with this Email ID already exists!');
+                return;
+            }
+            
+            // Save to localStorage
+            users.push(user);
+            localStorage.setItem('civicgrid_users', JSON.stringify(users));
+
+            alert('Registration Successful! Please sign in with your new credentials.');
+            window.location.href = 'login.html';
         });
     </script>
 </body>
