@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Practical 6: Tailwind CSS Demonstration - CivicGrid</title>
+    <!-- Tailwind CSS Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#fff7ed',
+                            100: '#ffedd5',
+                            500: '#f97316',
+                            600: '#ea580c',
+                            700: '#c2410c',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 antialiased p-4 sm:p-8">
+
+    <!-- Header Navigation -->
+    <header class="max-w-7xl mx-auto mb-8 bg-white/80 backdrop-blur-md border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-amber-400 flex items-center justify-center text-white font-bold text-xl shadow-md shadow-brand-500/20">
+                ⚡
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-slate-900">CivicGrid Tailwind CSS Showcase</h1>
+                <p class="text-xs text-slate-500 font-medium">Practical - 6: Responsive Utility-First Design</p>
+            </div>
+        </div>
+
+        <nav class="flex flex-wrap gap-2 text-sm font-semibold">
+            <a href="index.html" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition">Main App</a>
+            <a href="login.html" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition">Login Page</a>
+            <a href="registration.html" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition">Register Page</a>
+        </nav>
+    </header>
+
+    <main class="max-w-7xl mx-auto space-y-10">
+
+        <!-- Hero Section featuring Tailwind Gradients & Typography -->
+        <section class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900 p-8 sm:p-12 text-white shadow-2xl">
+            <div class="absolute -right-10 -bottom-10 w-80 h-80 bg-brand-500/20 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="relative z-10 max-w-2xl space-y-4">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-500/20 text-brand-300 border border-brand-500/30">
+                    ✨ Practical 6 Demonstration
+                </span>
+                <h2 class="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
+                    Utility-First CSS Framework <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-brand-400">In Action</span>
+                </h2>
+                <p class="text-slate-300 text-sm sm:text-base leading-relaxed">
+                    Tailwind CSS provides low-level, highly composable utility classes to build bespoke user interfaces directly in your HTML without writing traditional custom CSS stylesheets.
+                </p>
+                <div class="pt-2 flex flex-wrap gap-3">
+                    <a href="#utilities" class="px-5 py-2.5 rounded-xl bg-brand-500 text-white font-semibold text-sm shadow-lg shadow-brand-500/30 hover:bg-brand-600 transition active:scale-95">Explore Utilities</a>
+                    <a href="#grid" class="px-5 py-2.5 rounded-xl bg-white/10 text-white font-semibold text-sm hover:bg-white/20 transition backdrop-blur-sm">CSS Grid & Components</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats Overview Cards (Tailwind Grid & Cards) -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition group">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Reports</span>
+                    <span class="p-2 rounded-xl bg-blue-50 text-blue-600 group-hover:scale-110 transition">📋</span>
+                </div>
+                <div class="text-3xl font-extrabold text-slate-900">128</div>
+                <p class="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">
+                    ↑ 12% from last week
+                </p>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition group">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">In Progress</span>
+                    <span class="p-2 rounded-xl bg-amber-50 text-amber-600 group-hover:scale-110 transition">🔧</span>
+                </div>
+                <div class="text-3xl font-extrabold text-slate-900">42</div>
+                <p class="text-xs text-amber-600 font-medium mt-1">Active resolution tasks</p>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition group">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Resolved</span>
+                    <span class="p-2 rounded-xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition">✅</span>
+                </div>
+                <div class="text-3xl font-extrabold text-slate-900">76</div>
+                <p class="text-xs text-emerald-600 font-medium mt-1">Completed civic issues</p>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition group">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Zones</span>
+                    <span class="p-2 rounded-xl bg-purple-50 text-purple-600 group-hover:scale-110 transition">🌐</span>
+                </div>
+                <div class="text-3xl font-extrabold text-slate-900">5</div>
+                <p class="text-xs text-slate-500 font-medium mt-1">North, South, East, West, Downtown</p>
+            </div>
+        </section>
+
+        <!-- Feature Grid: Core Concepts of Tailwind CSS -->
+        <section id="utilities" class="space-y-6">
+            <div class="border-b border-slate-200 pb-4">
+                <h3 class="text-2xl font-bold text-slate-900 tracking-tight">Key Tailwind CSS Concepts</h3>
+                <p class="text-sm text-slate-500">How Tailwind transforms HTML structure into responsive modern interfaces.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="grid">
+
+                <!-- Concept 1: Utility Classes -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between">
+                    <div>
+                        <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold mb-4">
+                            1
+                        </div>
+                        <h4 class="text-lg font-bold text-slate-900">Utility-First Classes</h4>
+                        <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                            Instead of writing hundreds of lines of custom CSS rule blocks, Tailwind uses single-purpose atomic classes like <code class="bg-slate-100 text-brand-700 px-1.5 py-0.5 rounded text-xs">flex</code>, <code class="bg-slate-100 text-brand-700 px-1.5 py-0.5 rounded text-xs">p-4</code>, and <code class="bg-slate-100 text-brand-700 px-1.5 py-0.5 rounded text-xs">rounded-xl</code>.
+                        </p>
+                    </div>
+                    <div class="bg-slate-900 text-emerald-400 p-3 rounded-xl text-xs font-mono overflow-x-auto">
+                        &lt;div class="p-4 bg-blue-500 rounded-xl"&gt;
+                    </div>
+                </div>
+
+                <!-- Concept 2: State Modifiers -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between">
+                    <div>
+                        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold mb-4">
+                            2
+                        </div>
+                        <h4 class="text-lg font-bold text-slate-900">Hover & State Modifiers</h4>
+                        <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                            Style elements conditionally on hover, focus, active, disabled, or group state changes using prefix modifiers like <code class="bg-slate-100 text-brand-700 px-1.5 py-0.5 rounded text-xs">hover:shadow-lg</code> and <code class="bg-slate-100 text-brand-700 px-1.5 py-0.5 rounded text-xs">focus:ring-2</code>.
+                        </p>
+                    </div>
+                    <button class="w-full py-2.5 px-4 rounded-xl bg-brand-500 text-white font-semibold text-sm shadow-sm hover:bg-brand-600 hover:shadow-md active:scale-95 transition-all">
+                        Hover & Click Me
+                    </button>
+                </div>
+
+                <!-- Concept 3: Responsive Breakpoints -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between">
+                    <div>
+                        <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold mb-4">
+                            3
+                        </div>
+                        <h4 class="text-lg font-bold text-slate-900">Responsive Breakpoints</h4>
+                        <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                            Mobile-first responsive design using built-in breakpoints: <code class="bg-slate-100 text-brand-700 px-1.5 py-0.5 rounded text-xs">sm:</code> (640px), <code class="bg-slate-100 text-brand-700 px-1.5 py-0.5 rounded text-xs">md:</code> (768px), <code class="bg-slate-100 text-brand-700 px-1.5 py-0.5 rounded text-xs">lg:</code> (1024px).
+                        </p>
+                    </div>
+                    <div class="bg-emerald-50 text-emerald-800 p-3 rounded-xl text-xs font-semibold text-center border border-emerald-200">
+                        <span class="block sm:hidden">📱 Current View: Mobile (&lt;640px)</span>
+                        <span class="hidden sm:block md:hidden">💻 Current View: Small Screen (&gt;640px)</span>
+                        <span class="hidden md:block">🖥️ Current View: Desktop (&gt;768px)</span>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- UI Component Showcase -->
+        <section class="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+            <div class="border-b border-slate-200 pb-4">
+                <h3 class="text-xl font-bold text-slate-900">Tailwind Component Showcase</h3>
+                <p class="text-xs text-slate-500">Custom UI components built entirely using Tailwind CSS utility classes.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                <!-- Form Controls Demo -->
+                <div class="space-y-4">
+                    <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Form Controls & Inputs</h4>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Issue Description</label>
+                            <input type="text" placeholder="e.g. Broken water pipe near main street" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Select Zone</label>
+                                <select class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 outline-none transition">
+                                    <option>North Zone</option>
+                                    <option>South Zone</option>
+                                    <option>East Zone</option>
+                                    <option>West Zone</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Priority Level</label>
+                                <select class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 outline-none transition">
+                                    <option>High</option>
+                                    <option>Medium</option>
+                                    <option>Low</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button class="w-full py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition active:scale-95">
+                            Submit Demo Complaint
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Badges, Alerts & Interactive Pills -->
+                <div class="space-y-4">
+                    <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Badges, Status Pills & Alerts</h4>
+
+                    <div class="flex flex-wrap gap-2">
+                        <span class="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700">📋 Reported</span>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">🔧 In Progress</span>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">✅ Resolved</span>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700">📍 Geolocation API</span>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700">⚡ Tailwind CSS</span>
+                    </div>
+
+                    <!-- Tailwind Alert Boxes -->
+                    <div class="space-y-3 pt-2">
+                        <div class="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3 text-amber-800 text-xs font-medium">
+                            <span class="text-base">💡</span>
+                            <div>
+                                <strong class="font-bold block text-amber-900 mb-0.5">Local Storage Integration</strong>
+                                Tasks submitted here seamlessly persist across browser sessions using HTML5 LocalStorage.
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-blue-50 border border-blue-200 flex items-start gap-3 text-blue-800 text-xs font-medium">
+                            <span class="text-base">🚀</span>
+                            <div>
+                                <strong class="font-bold block text-blue-900 mb-0.5">Practical 6 Implementation</strong>
+                                Tailwind CSS has been applied across all primary HTML pages in branch <code class="bg-blue-100 px-1 py-0.5 rounded text-blue-900">practical-6</code>.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="max-w-7xl mx-auto mt-12 text-center text-xs text-slate-500 py-6 border-t border-slate-200">
+        CivicGrid — Practical 6: Tailwind CSS Integration & Demonstration Page
+    </footer>
+
+</body>
+</html>

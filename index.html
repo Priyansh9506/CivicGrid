@@ -1,108 +1,39 @@
 <!--
-    Practical - 4: CivicGrid — Area-Wise Task Manager + Kanban Board
-    Description: Extends the Practical-3 task manager with three HTML5 APIs:
-                 I.   Geolocation API — detect user's current location
-                 II.  Local Storage API — persist tasks across sessions
-                 III. Drag and Drop API — Kanban board view with draggable cards
+    Practical - 6: CivicGrid — Area-Wise Task Manager + Kanban Board + Tailwind CSS
+    Description: Demonstrates Tailwind CSS utility-first styling applied across the full HTML web application,
+                 integrating Geolocation, Local Storage, and Drag and Drop APIs.
 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CivicGrid - Area-Wise Task Manager</title>
+    <title>CivicGrid - Area-Wise Task Manager (Tailwind CSS)</title>
+    <!-- Tailwind CSS Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#fff7ed',
+                            100: '#ffedd5',
+                            500: '#f97316',
+                            600: '#ea580c',
+                            700: '#c2410c',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <style>
-        :root {
-            --primary: #f97316;
-            --primary-hover: #ea580c;
-            --bg-color: #fdf6e3;
-            --card-bg: #ffffff;
-            --text-main: #334155;
-            --text-muted: #64748b;
-            --border-color: #e2e8f0;
-        }
+        body { font-family: 'Inter', sans-serif; }
         
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg-color);
-            color: var(--text-main);
-            min-height: 100vh;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            padding: 40px 20px;
-            box-sizing: border-box;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 1100px;
-            background: var(--card-bg);
-            border-radius: 24px;
-            border: 1px solid var(--border-color);
-            padding: 40px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-        }
-
-        .responsive-banner img {
-            width: 100%;
-            max-width: 800px;
-            height: auto;
-            display: block;
-            margin: 0 auto 20px auto;
-            border-radius: 12px;
-        }
-
-        h1 {
-            text-align: center;
-            font-size: 5vw;
-            margin-bottom: 10px;
-            color: var(--primary);
-        }
-
-        p.subtitle {
-            text-align: center;
-            color: var(--text-muted);
-            margin-bottom: 24px;
-        }
-
-        /* ── I. Geolocation — Location Bar ── */
-        .location-bar {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 24px;
-        }
-
-        .btn-location {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: #fff7ed;
-            border: 1px solid #fdba74;
-            border-radius: 50px;
-            padding: 10px 20px;
-            font-size: 0.88rem;
-            font-weight: 500;
-            color: #c2410c;
-            cursor: pointer;
-            font-family: inherit;
-            transition: all 0.3s ease;
-        }
-
-        .btn-location:hover {
-            background: #ffedd5;
-            border-color: var(--primary);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
-        }
-
-        .btn-location .pulse-dot {
+        .pulse-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
@@ -111,7 +42,7 @@
         }
 
         .btn-location.detecting .pulse-dot {
-            background: var(--primary);
+            background: #f97316;
         }
 
         @keyframes pulse {
@@ -119,662 +50,166 @@
             50%      { opacity: 0.4; transform: scale(1.5); }
         }
 
-        /* ── View Toggle ── */
-        .view-toggle {
-            display: flex;
-            justify-content: center;
-            gap: 0;
-            margin-bottom: 28px;
-        }
-
-        .view-toggle button {
-            padding: 10px 24px;
-            font-size: 0.88rem;
-            font-weight: 600;
-            font-family: inherit;
-            border: 1px solid var(--border-color);
-            background: #ffffff;
-            color: var(--text-muted);
-            cursor: pointer;
-            transition: all 0.25s ease;
-        }
-
-        .view-toggle button:first-child {
-            border-radius: 10px 0 0 10px;
-        }
-
-        .view-toggle button:last-child {
-            border-radius: 0 10px 10px 0;
-            border-left: none;
-        }
-
-        .view-toggle button.active {
-            background: var(--primary);
-            color: #ffffff;
-            border-color: var(--primary);
-        }
-
-        .view-toggle button:not(.active):hover {
-            background: #fff7ed;
-            color: var(--primary);
-            transform: none;
-            box-shadow: none;
-        }
-
-        /* ── Input Section ── */
-        .input-section {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            margin-bottom: 32px;
-            background: #fff7ed;
-            padding: 20px;
-            border-radius: 16px;
-            border: 1px solid #fdba74;
-        }
-        
-        .input-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            width: 100%;
-        }
-
-        .input-row > * { flex: 1 1 200px; }
-        .input-row button { flex: 0 0 auto; }
-        .full-width { flex: 1 1 100% !important; }
-
-        input, select, button {
-            font-family: 'Inter', sans-serif;
-            border: none;
-            border-radius: 10px;
-            padding: 12px 16px;
-            font-size: 1rem;
-            outline: none;
-            transition: all 0.3s ease;
-        }
-
-        input, select {
-            background: #ffffff;
-            color: var(--text-main);
-            border: 1px solid var(--border-color);
-            user-select: auto;
-            -webkit-user-select: auto;
-        }
-        
-        input[type="file"] {
-            padding: 9px 12px;
-            color: var(--text-muted);
-            cursor: pointer;
-        }
-        
-        input[type="file"]::file-selector-button {
-            border: none;
-            background: #ffedd5;
-            color: #c2410c;
-            padding: 6px 12px;
-            border-radius: 6px;
-            margin-right: 10px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-        
-        input[type="file"]::file-selector-button:hover {
-            background: #fed7aa;
-        }
-
-        input::placeholder { color: #94a3b8; }
-        
-        input:focus, select:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
-        }
-        
-        select option {
-            background: #ffffff;
-            color: var(--text-main);
-        }
-
-        button {
-            background: var(--primary);
-            color: white;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: var(--primary-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 6px -1px rgba(249, 115, 22, 0.3);
-        }
-
-        /* ============================================
-           LIST VIEW (original Practical-3 design)
-           ============================================ */
-        .area-section {
-            margin-bottom: 30px;
-        }
-
-        .area-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--text-main);
-            margin-bottom: 15px;
-            padding-left: 10px;
-            border-left: 4px solid var(--primary);
-        }
-
-        ul {
-            list-style-type: none;
-            padding: 0;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        li {
-            background: #ffffff;
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 20px;
-            transition: all 0.3s ease;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-        }
-
-        li:hover {
-            background: #f8fafc;
-            border-color: #cbd5e1;
-            transform: translateX(5px);
-        }
-
-        .task-content {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            width: 100%;
-            flex: 1;
-        }
-
-        .task-image {
-            margin-top: 5px;
-            width: 100%;
-            max-width: 400px;
-            border-radius: 8px;
-            max-height: 250px;
-            object-fit: cover;
-            border: 1px solid var(--border-color);
-        }
-
-        .task-title {
-            font-size: 1.1rem;
-            font-weight: 500;
-        }
-
-        .task-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            font-size: 0.85rem;
-        }
-
-        .tag {
-            background: #ffedd5;
-            color: #c2410c;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 0.8rem;
-        }
-
-        .tag-location {
-            background: #f3e8ff;
-            color: #7c3aed;
-        }
-
-        .completed .task-title {
-            text-decoration: line-through;
-            color: var(--text-muted);
-        }
-        
-        .completed {
-            opacity: 0.6;
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-            flex-shrink: 0;
-        }
-
-        .btn-toggle {
-            background: #d1fae5;
-            color: #059669;
-        }
-        .btn-toggle:hover {
-            background: #10b981;
-            color: white;
-        }
-        
-        .btn-undo {
-            background: #fef3c7;
-            color: #d97706;
-        }
-        .btn-undo:hover {
-            background: #f59e0b;
-            color: white;
-        }
-
-        .btn-delete {
-            background: #fee2e2;
-            color: #dc2626;
-        }
-        .btn-delete:hover {
-            background: #ef4444;
-            color: white;
-        }
-
-        /* ============================================
-           III. KANBAN VIEW — Drag and Drop Board
-           ============================================ */
-        .kanban-board {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-            min-height: 350px;
-        }
-
-        .kanban-column {
-            background: #fafbfc;
-            border: 2px dashed var(--border-color);
-            border-radius: 16px;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            min-height: 300px;
-            transition: all 0.3s ease;
-        }
-
-        .kanban-column.drag-over {
-            border-color: var(--primary);
-            border-style: solid;
-            background: #fff7ed;
-            box-shadow: inset 0 0 20px rgba(249, 115, 22, 0.08);
-        }
-
-        .column-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 14px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid var(--border-color);
-        }
-
-        .column-header h3 {
-            font-size: 0.92rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            margin: 0;
-        }
-
-        .column-count {
-            font-size: 0.75rem;
-            font-weight: 700;
-            padding: 2px 10px;
-            border-radius: 50px;
-            min-width: 24px;
-            text-align: center;
-        }
-
-        /* Column colors */
-        .col-reported .column-header h3 { color: #3b82f6; }
-        .col-reported .column-count { background: #dbeafe; color: #2563eb; }
-        .col-reported .column-header { border-color: #bfdbfe; }
-        .col-reported.drag-over { border-color: #3b82f6; background: #eff6ff; }
-
-        .col-inprogress .column-header h3 { color: var(--primary); }
-        .col-inprogress .column-count { background: #ffedd5; color: #ea580c; }
-        .col-inprogress .column-header { border-color: #fed7aa; }
-
-        .col-resolved .column-header h3 { color: #16a34a; }
-        .col-resolved .column-count { background: #dcfce7; color: #16a34a; }
-        .col-resolved .column-header { border-color: #bbf7d0; }
-        .col-resolved.drag-over { border-color: #22c55e; background: #f0fdf4; }
-
-        .card-list {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        /* Kanban Task Card */
-        .kanban-card {
-            background: #ffffff;
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 14px 16px;
-            cursor: grab;
-            transition: all 0.25s ease;
-            position: relative;
-            user-select: none;
-        }
-
-        .kanban-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-            border-color: #cbd5e1;
-        }
-
-        .kanban-card:active { cursor: grabbing; }
-
-        .kanban-card.dragging {
-            opacity: 0.35;
-            transform: rotate(2deg) scale(0.95);
-        }
-
-        .kanban-card .drag-handle {
-            position: absolute;
-            top: 8px;
-            right: 10px;
-            color: #cbd5e1;
-            font-size: 0.75rem;
-            letter-spacing: 2px;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-
-        .kanban-card:hover .drag-handle { opacity: 1; }
-
-        .kanban-card .card-title {
-            font-size: 0.88rem;
-            font-weight: 500;
-            margin-bottom: 8px;
-            padding-right: 24px;
-            line-height: 1.35;
-        }
-
-        .kanban-card .card-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-            margin-bottom: 8px;
-        }
-
-        .kanban-card .card-tags .tag {
-            font-size: 0.68rem;
-            padding: 3px 8px;
-        }
-
-        .kanban-card .card-image {
-            width: 100%;
-            max-height: 120px;
-            object-fit: cover;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            border: 1px solid var(--border-color);
-        }
-
-        .kanban-card .card-footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .kanban-card .card-time {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-        }
-
-        .kanban-card .btn-card-delete {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 0.78rem;
-            padding: 3px 6px;
-            border-radius: 6px;
-            transition: all 0.2s;
-            font-family: inherit;
-        }
-
-        .kanban-card .btn-card-delete:hover {
-            background: #fee2e2;
-            color: #dc2626;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .col-resolved .kanban-card { opacity: 0.65; }
-        .col-resolved .kanban-card:hover { opacity: 1; }
-        .col-resolved .card-title { text-decoration: line-through; color: var(--text-muted); }
-
-        .kanban-empty {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex: 1;
-            color: var(--text-muted);
-            font-size: 0.8rem;
-            font-style: italic;
-            border: 2px dashed var(--border-color);
-            border-radius: 10px;
-            padding: 20px;
-            min-height: 60px;
-        }
-
-        /* ── Toast ── */
-        .toast {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            background: #ffffff;
-            border: 1px solid var(--border-color);
-            border-left: 4px solid var(--primary);
-            padding: 14px 22px;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            color: var(--text-main);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-            z-index: 1000;
-            opacity: 0;
-            transform: translateY(16px);
-            transition: all 0.3s ease;
-            pointer-events: none;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .toast.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        /* ── Map Container ── */
-        .map-section {
-            margin-bottom: 28px;
-            border-radius: 16px;
-            overflow: hidden;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-            background: var(--card-bg);
-            position: relative;
-        }
-
-        #map {
-            height: 350px;
-            width: 100%;
-            z-index: 1;
-        }
-
-        /* Leaflet popup styling overrides */
+        /* Leaflet map popup overrides */
         .leaflet-popup-content-wrapper {
             border-radius: 12px;
             font-family: 'Inter', sans-serif;
-            color: var(--text-main);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            border: 1px solid var(--border-color);
             padding: 4px;
-        }
-        .leaflet-popup-tip {
-            background: #ffffff;
-            border: 1px solid var(--border-color);
-        }
-        .popup-title {
-            margin: 0 0 4px 0;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: var(--text-main);
-        }
-        .popup-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 6px;
-        }
-        .popup-img {
-            width: 100%;
-            max-height: 100px;
-            object-fit: cover;
-            border-radius: 8px;
-            margin-top: 6px;
-            border: 1px solid var(--border-color);
-        }
-
-        /* ── Responsive ── */
-        @media (max-width: 768px) {
-            .input-section > * { flex: 1 1 100%; }
-            .input-section button { width: 100%; }
-            li {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 15px;
-            }
-            .actions {
-                width: 100%;
-                justify-content: flex-end;
-            }
-            h1 { font-size: 6vw; }
-            .kanban-board {
-                grid-template-columns: 1fr;
-            }
-            .kanban-column { min-height: 180px; }
-        }
-        
-        @media (max-width: 480px) {
-            h1 { font-size: 8vw; }
-            .container { padding: 20px; }
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <!-- Responsive banner -->
-        <picture class="responsive-banner">
-            <source media="(max-width: 600px)" srcset="https://via.placeholder.com/600x300/f97316/FFFFFF?text=CivicGrid+Mobile">
-            <img src="https://via.placeholder.com/1200x400/f97316/FFFFFF?text=CivicGrid+Desktop" alt="CivicGrid Banner">
+<body class="bg-amber-50/40 min-h-screen text-slate-800 antialiased p-4 sm:p-8 flex justify-center">
+
+    <div class="w-full max-w-5xl bg-white rounded-3xl border border-slate-200 p-6 sm:p-10 shadow-xl space-y-8">
+        
+        <!-- Top Navigation Bar -->
+        <header class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-500 text-white font-black text-xl flex items-center justify-center shadow-md shadow-brand-500/30">
+                    C
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900 tracking-tight">CivicGrid</h2>
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">
+                        Practical 6 • Tailwind CSS
+                    </span>
+                </div>
+            </div>
+            
+            <nav class="flex items-center gap-3">
+                <a href="tailwind_demo.html" class="px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition">
+                    ⚡ Tailwind Showcase
+                </a>
+            </nav>
+        </header>
+
+        <!-- Responsive Banner -->
+        <picture class="block rounded-2xl overflow-hidden shadow-sm border border-slate-200">
+            <source media="(max-width: 600px)" srcset="https://via.placeholder.com/600x250/f97316/FFFFFF?text=CivicGrid+Mobile">
+            <img src="https://via.placeholder.com/1200x350/f97316/FFFFFF?text=CivicGrid+Desktop" alt="CivicGrid Banner" class="w-full h-auto object-cover max-h-56">
         </picture>
 
-        <h1>CivicGrid</h1>
-        <p class="subtitle">Area-Wise Task Management for Civic Authorities</p>
-
-        <!-- User Session Header -->
-        <div id="userHeader" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 10px 20px; background: #fff7ed; border-radius: 12px; border: 1px solid #fdba74;">
-            <span id="welcomeMessage" style="font-weight: 600; color: var(--primary);">Welcome!</span>
-            <button onclick="signOut()" style="padding: 8px 16px; font-size: 0.9rem; background: #dc2626;">Sign Out</button>
+        <!-- Title Header -->
+        <div class="text-center space-y-2">
+            <h1 class="text-3xl sm:text-5xl font-extrabold text-brand-600 tracking-tight">CivicGrid</h1>
+            <p class="text-sm sm:text-base text-slate-500 font-medium">Area-Wise Task Management for Civic Authorities</p>
         </div>
 
-        <!-- I. Geolocation API — Button to detect user's current location -->
-        <div class="location-bar">
-            <button class="btn-location" id="locationBtn" onclick="detectLocation()">
+        <!-- User Session Header -->
+        <div id="userHeader" class="flex flex-wrap items-center justify-between gap-3 p-4 bg-orange-50/80 rounded-2xl border border-orange-200 text-sm">
+            <span id="welcomeMessage" class="font-bold text-brand-700">Welcome!</span>
+            <button onclick="signOut()" class="px-4 py-2 text-xs font-bold rounded-xl bg-red-600 text-white hover:bg-red-700 transition active:scale-95 shadow-sm">
+                Sign Out
+            </button>
+        </div>
+
+        <!-- I. Geolocation API — Location Bar -->
+        <div class="flex justify-center">
+            <button class="btn-location inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-orange-50 border border-orange-300 text-xs sm:text-sm font-semibold text-brand-700 hover:bg-orange-100 transition shadow-sm hover:shadow active:scale-95" id="locationBtn" onclick="detectLocation()">
                 <span class="pulse-dot"></span>
                 <span id="locationText">📍 Detect My Location</span>
             </button>
         </div>
 
-        <!-- Interactive Map Section -->
-        <div class="map-section">
-            <div id="map"></div>
+        <!-- Interactive Leaflet Map Container -->
+        <div class="rounded-2xl overflow-hidden border border-slate-200 shadow-md relative bg-slate-50">
+            <div id="map" class="h-80 w-full z-10"></div>
         </div>
 
-        <!-- View Toggle: List ↔ Kanban -->
-        <div class="view-toggle">
-            <button id="btnListView" class="active" onclick="switchView('list')">📋 List View</button>
-            <button id="btnKanbanView" onclick="switchView('kanban')">🗂️ Kanban Board</button>
-        </div>
-
-        <!-- Input Section -->
-        <div class="input-section">
-            <h3 style="margin-top: 0; margin-bottom: 5px; font-size: 1.1rem; color: #c2410c;">Reporter Details</h3>
-            <div class="input-row">
-                <input type="text" id="reporterName" placeholder="Your Name" required>
-                <input type="text" id="reporterAadhar" placeholder="Aadhar Card No." required>
-                <input type="number" id="reporterAge" placeholder="Age" min="1" required>
-                <select id="reporterGender" required>
-                    <option value="" disabled selected>Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                </select>
-            </div>
-            <div class="input-row">
-                <input type="text" id="reporterResidence" placeholder="Residence Address" class="full-width" required>
-            </div>
-            
-            <h3 style="margin-top: 10px; margin-bottom: 5px; font-size: 1.1rem; color: #c2410c;">Issue Details</h3>
-            <div class="input-row">
-                <input type="text" id="taskInput" placeholder="Describe the civic issue (e.g., Pothole repair needed)..." class="full-width" required>
-            </div>
-            <div class="input-row">
-                <select id="areaInput" required>
-                    <option value="" disabled selected>Select Area</option>
-                    <option value="North Zone">North Zone</option>
-                    <option value="South Zone">South Zone</option>
-                    <option value="East Zone">East Zone</option>
-                    <option value="West Zone">West Zone</option>
-                    <option value="Downtown">Downtown</option>
-                </select>
-                <input type="file" id="imageInput" accept="image/*">
-                <button onclick="addTask()">Submit Complaint</button>
+        <!-- View Toggle (List ↔ Kanban Board) -->
+        <div class="flex justify-center">
+            <div class="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs sm:text-sm font-semibold">
+                <button id="btnListView" class="px-5 py-2 rounded-lg transition-all duration-200 active font-semibold" onclick="switchView('list')">
+                    📋 List View
+                </button>
+                <button id="btnKanbanView" class="px-5 py-2 rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-900" onclick="switchView('kanban')">
+                    🗂️ Kanban Board
+                </button>
             </div>
         </div>
 
-        <!-- LIST VIEW container (original design) -->
+        <!-- Input Section (Form Controls built with Tailwind) -->
+        <div class="bg-orange-50/70 p-6 rounded-2xl border border-orange-200 space-y-5">
+            <div>
+                <h3 class="text-sm font-bold text-brand-700 uppercase tracking-wider mb-3">Reporter Details</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <input type="text" id="reporterName" placeholder="Your Name" required
+                        class="px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+                    <input type="text" id="reporterAadhar" placeholder="Aadhar Card No." required
+                        class="px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+                    <input type="number" id="reporterAge" placeholder="Age" min="1" required
+                        class="px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+                    <select id="reporterGender" required
+                        class="px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+                        <option value="" disabled selected>Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="mt-3">
+                    <input type="text" id="reporterResidence" placeholder="Residence Address" required
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+                </div>
+            </div>
+
+            <div class="pt-2 border-t border-orange-200/60">
+                <h3 class="text-sm font-bold text-brand-700 uppercase tracking-wider mb-3">Issue Details</h3>
+                <div class="space-y-3">
+                    <input type="text" id="taskInput" placeholder="Describe the civic issue (e.g., Pothole repair needed)..." required
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <select id="areaInput" required
+                            class="px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+                            <option value="" disabled selected>Select Area</option>
+                            <option value="North Zone">North Zone</option>
+                            <option value="South Zone">South Zone</option>
+                            <option value="East Zone">East Zone</option>
+                            <option value="West Zone">West Zone</option>
+                            <option value="Downtown">Downtown</option>
+                        </select>
+                        
+                        <input type="file" id="imageInput" accept="image/*"
+                            class="px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-500 bg-white file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-brand-700 hover:file:bg-orange-200">
+                        
+                        <button onclick="addTask()"
+                            class="py-2.5 px-5 rounded-xl bg-brand-500 text-white font-bold text-sm shadow-md shadow-brand-500/20 hover:bg-brand-600 transition active:scale-95">
+                            Submit Complaint
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LIST VIEW Container -->
         <div id="listView">
-            <div id="tasksContainer">
+            <div id="tasksContainer" class="space-y-6">
                 <!-- Tasks grouped by area injected here -->
             </div>
         </div>
 
-        <!-- III. Drag and Drop API — KANBAN VIEW container -->
+        <!-- III. Drag and Drop API — KANBAN VIEW Container -->
         <div id="kanbanView" style="display: none;">
-            <div class="kanban-board" id="kanbanBoard">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 min-h-[350px]" id="kanbanBoard">
                 <!-- 3 columns injected by app.js -->
             </div>
         </div>
     </div>
 
-    <!-- Toast notification -->
-    <div class="toast" id="toast"></div>
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-white border border-slate-200 border-l-4 border-l-brand-500 px-6 py-3.5 rounded-2xl shadow-xl text-xs font-semibold text-slate-800 z-50 transition-all duration-300 opacity-0 translate-y-4 pointer-events-none"></div>
 
     <!-- Leaflet.js Library -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
     <!-- User Session Logic -->
     <script>
-        // Check session
         const currentUser = JSON.parse(localStorage.getItem('civicgrid_currentUser'));
         if (!currentUser) {
-            // Redirect to login if not authenticated
             window.location.href = 'login.html';
         } else {
             document.getElementById('welcomeMessage').innerText = 'Welcome, ' + currentUser.firstName + ' (' + currentUser.emailId + ')!';
-            // Pre-fill reporter details if applicable
             setTimeout(() => {
                 const nameInput = document.getElementById('reporterName');
                 const aadharInput = document.getElementById('reporterAadhar');
@@ -787,9 +222,33 @@
             localStorage.removeItem('civicgrid_currentUser');
             window.location.href = 'login.html';
         }
+
+        // View Switcher Styling Updater
+        const originalSwitchView = window.switchView;
+        function switchView(view) {
+            currentView = view;
+            document.getElementById('listView').style.display = view === 'list' ? '' : 'none';
+            document.getElementById('kanbanView').style.display = view === 'kanban' ? '' : 'none';
+            
+            const btnList = document.getElementById('btnListView');
+            const btnKanban = document.getElementById('btnKanbanView');
+            
+            if (view === 'list') {
+                btnList.className = 'px-5 py-2 rounded-lg transition-all duration-200 bg-brand-500 text-white font-semibold shadow-sm';
+                btnKanban.className = 'px-5 py-2 rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-900 font-semibold';
+            } else {
+                btnKanban.className = 'px-5 py-2 rounded-lg transition-all duration-200 bg-brand-500 text-white font-semibold shadow-sm';
+                btnList.className = 'px-5 py-2 rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-900 font-semibold';
+            }
+            render();
+        }
     </script>
 
-    <!-- II. Local Storage API — Script loads/saves tasks from localStorage -->
+    <!-- Script loads/saves tasks from localStorage -->
     <script src="app.js"></script>
+    <script>
+        // Initial button active state
+        switchView('list');
+    </script>
 </body>
 </html>

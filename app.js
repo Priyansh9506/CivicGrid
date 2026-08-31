@@ -447,7 +447,7 @@ function renderListView() {
     container.innerHTML = '';
 
     if (tasks.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 40px 0;">No tasks found.</p>';
+        container.innerHTML = '<p class="text-center text-slate-400 py-10 text-sm font-medium">No tasks found.</p>';
         return;
     }
 
@@ -460,37 +460,39 @@ function renderListView() {
 
     for (const [area, areaTasks] of Object.entries(groupedTasks)) {
         const areaSection = document.createElement('div');
-        areaSection.className = 'area-section';
+        areaSection.className = 'area-section mb-8';
 
         const areaTitle = document.createElement('div');
-        areaTitle.className = 'area-title';
+        areaTitle.className = 'text-lg font-bold text-slate-900 border-l-4 border-brand-500 pl-3 mb-4';
         areaTitle.textContent = area;
         areaSection.appendChild(areaTitle);
 
         const ul = document.createElement('ul');
+        ul.className = 'space-y-4';
 
         areaTasks.forEach(task => {
             const li = document.createElement('li');
-            if (task.completed) li.classList.add('completed');
+            li.className = 'bg-white border border-slate-200 rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-start gap-4 shadow-sm hover:shadow-md transition-all duration-200';
+            if (task.completed) li.classList.add('opacity-60', 'bg-slate-50');
 
             const taskContent = document.createElement('div');
-            taskContent.className = 'task-content';
+            taskContent.className = 'task-content flex-1 space-y-2 w-full';
 
             const title = document.createElement('div');
-            title.className = 'task-title';
+            title.className = `text-base font-semibold text-slate-900 ${task.completed ? 'line-through text-slate-400' : ''}`;
             title.textContent = task.text;
 
             const meta = document.createElement('div');
-            meta.className = 'task-meta';
+            meta.className = 'task-meta flex flex-wrap gap-2 text-xs';
 
             const areaTag = document.createElement('span');
-            areaTag.className = 'tag';
+            areaTag.className = 'px-3 py-1 bg-orange-100 text-brand-700 rounded-full font-bold';
             areaTag.textContent = `📍 ${task.area}`;
             meta.appendChild(areaTag);
 
             if (task.location) {
                 const locTag = document.createElement('span');
-                locTag.className = 'tag tag-location';
+                locTag.className = 'px-3 py-1 bg-purple-100 text-purple-700 rounded-full font-bold';
                 locTag.textContent = `🌐 ${task.location}`;
                 meta.appendChild(locTag);
             }
@@ -500,9 +502,7 @@ function renderListView() {
 
             if (task.reporterDetails) {
                 const reporterInfo = document.createElement('div');
-                reporterInfo.style.fontSize = '0.8rem';
-                reporterInfo.style.color = 'var(--text-muted)';
-                reporterInfo.style.marginTop = '4px';
+                reporterInfo.className = 'text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-200';
                 reporterInfo.innerHTML = `<strong>Reported by:</strong> ${task.reporterDetails.name} (Aadhar: ${task.reporterDetails.aadhar})`;
                 taskContent.appendChild(reporterInfo);
             }
@@ -510,20 +510,20 @@ function renderListView() {
             if (task.image) {
                 const img = document.createElement('img');
                 img.src = task.image;
-                img.className = 'task-image';
+                img.className = 'w-full max-w-sm max-h-52 object-cover rounded-xl border border-slate-200 mt-2';
                 taskContent.appendChild(img);
             }
 
             const actions = document.createElement('div');
-            actions.className = 'actions';
+            actions.className = 'actions flex items-center gap-2 self-end sm:self-center';
 
             const toggleBtn = document.createElement('button');
-            toggleBtn.className = task.completed ? 'btn-undo' : 'btn-toggle';
+            toggleBtn.className = task.completed ? 'px-4 py-2 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-xl text-xs font-bold transition' : 'px-4 py-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-xl text-xs font-bold transition';
             toggleBtn.textContent = task.completed ? 'Undo' : 'Complete';
             toggleBtn.onclick = () => toggleTask(task.id);
 
             const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'btn-delete';
+            deleteBtn.className = 'px-4 py-2 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded-xl text-xs font-bold transition';
             deleteBtn.textContent = 'Remove';
             deleteBtn.onclick = () => removeTask(task.id);
 
@@ -547,36 +547,33 @@ function renderListView() {
 let draggedTaskId = null;
 
 function handleDragStart(e) {
-    // III. Set the task ID into the dataTransfer object
     draggedTaskId = e.target.dataset.taskId;
     e.dataTransfer.setData('text/plain', draggedTaskId);
     e.dataTransfer.effectAllowed = 'move';
-    setTimeout(() => e.target.classList.add('dragging'), 0);
+    setTimeout(() => e.target.classList.add('opacity-40', 'rotate-2', 'scale-95'), 0);
 }
 
 function handleDragEnd(e) {
-    e.target.classList.remove('dragging');
+    e.target.classList.remove('opacity-40', 'rotate-2', 'scale-95');
     draggedTaskId = null;
-    document.querySelectorAll('.kanban-column').forEach(col => col.classList.remove('drag-over'));
+    document.querySelectorAll('.kanban-column').forEach(col => col.classList.remove('bg-orange-50', 'border-brand-500'));
 }
 
 function handleDragOver(e) {
-    // III. Prevent default to allow drop
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    e.currentTarget.classList.add('drag-over');
+    e.currentTarget.classList.add('bg-orange-50', 'border-brand-500');
 }
 
 function handleDragLeave(e) {
     if (!e.currentTarget.contains(e.relatedTarget)) {
-        e.currentTarget.classList.remove('drag-over');
+        e.currentTarget.classList.remove('bg-orange-50', 'border-brand-500');
     }
 }
 
 function handleDrop(e) {
-    // III. Handle the drop — move the task to the new column status
     e.preventDefault();
-    e.currentTarget.classList.remove('drag-over');
+    e.currentTarget.classList.remove('bg-orange-50', 'border-brand-500');
 
     const taskId = parseInt(e.dataTransfer.getData('text/plain'));
     const newStatus = e.currentTarget.dataset.status;
@@ -598,93 +595,89 @@ function renderKanbanView() {
 
     KANBAN_COLUMNS.forEach(col => {
         const colEl = document.createElement('div');
-        colEl.className = `kanban-column ${col.colorClass}`;
+        colEl.className = `kanban-column bg-slate-50/80 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col min-h-[320px] transition-all duration-200`;
         colEl.dataset.status = col.id;
 
-        // III. Attach drop-zone event listeners
         colEl.addEventListener('dragover', handleDragOver);
         colEl.addEventListener('dragleave', handleDragLeave);
         colEl.addEventListener('drop', handleDrop);
 
         const colTasks = tasks.filter(t => t.status === col.id);
 
-        // Column header
+        let headerColorClass = 'text-blue-600 border-blue-200';
+        let countBgClass = 'bg-blue-100 text-blue-700';
+        if (col.id === 'inprogress') {
+            headerColorClass = 'text-brand-600 border-orange-200';
+            countBgClass = 'bg-orange-100 text-brand-700';
+        } else if (col.id === 'resolved') {
+            headerColorClass = 'text-emerald-600 border-emerald-200';
+            countBgClass = 'bg-emerald-100 text-emerald-700';
+        }
+
         const header = document.createElement('div');
-        header.className = 'column-header';
+        header.className = `flex items-center justify-between pb-3 mb-3 border-b-2 ${headerColorClass}`;
         header.innerHTML = `
-            <h3>${col.label}</h3>
-            <span class="column-count">${colTasks.length}</span>
+            <h3 class="text-xs font-bold uppercase tracking-wider">${col.label}</h3>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold ${countBgClass}">${colTasks.length}</span>
         `;
         colEl.appendChild(header);
 
-        // Card list
         const cardList = document.createElement('div');
-        cardList.className = 'card-list';
+        cardList.className = 'card-list flex-1 space-y-3';
 
         if (colTasks.length === 0) {
             const empty = document.createElement('div');
-            empty.className = 'kanban-empty';
+            empty.className = 'h-24 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400 italic';
             empty.textContent = 'Drop tasks here';
             cardList.appendChild(empty);
         } else {
             colTasks.forEach(task => {
                 const card = document.createElement('div');
-                card.className = 'kanban-card';
-                // III. Make card draggable
+                card.className = `kanban-card bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition space-y-2 relative ${col.id === 'resolved' ? 'opacity-70 hover:opacity-100' : ''}`;
                 card.draggable = true;
                 card.dataset.taskId = task.id;
                 card.addEventListener('dragstart', handleDragStart);
                 card.addEventListener('dragend', handleDragEnd);
 
-                // Drag handle
-                const handle = document.createElement('div');
-                handle.className = 'drag-handle';
-                handle.textContent = '⠿';
-                card.appendChild(handle);
-
-                // Title
                 const title = document.createElement('div');
-                title.className = 'card-title';
+                title.className = `text-xs font-semibold text-slate-900 leading-snug pr-4 ${col.id === 'resolved' ? 'line-through text-slate-400' : ''}`;
                 title.textContent = task.text;
                 card.appendChild(title);
 
-                // Tags
                 const tags = document.createElement('div');
-                tags.className = 'card-tags';
+                tags.className = 'flex flex-wrap gap-1.5';
 
                 const areaTag = document.createElement('span');
-                areaTag.className = 'tag';
+                areaTag.className = 'px-2 py-0.5 bg-orange-100 text-brand-700 rounded-md text-[10px] font-bold';
                 areaTag.textContent = task.area;
                 tags.appendChild(areaTag);
 
                 if (task.location) {
                     const locTag = document.createElement('span');
-                    locTag.className = 'tag tag-location';
+                    locTag.className = 'px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md text-[10px] font-bold';
                     locTag.textContent = `📍 ${task.location}`;
                     tags.appendChild(locTag);
                 }
                 card.appendChild(tags);
 
-                // Image
                 if (task.image) {
                     const img = document.createElement('img');
                     img.src = task.image;
-                    img.className = 'card-image';
+                    img.className = 'w-full max-h-28 object-cover rounded-lg border border-slate-200';
                     img.alt = 'Task photo';
                     card.appendChild(img);
                 }
 
-                // Footer
                 const footer = document.createElement('div');
-                footer.className = 'card-footer';
+                footer.className = 'flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]';
 
                 const timeEl = document.createElement('span');
-                timeEl.className = 'card-time';
+                timeEl.className = 'text-slate-400 font-medium';
                 timeEl.textContent = timeAgo(task.createdAt);
                 footer.appendChild(timeEl);
 
                 const delBtn = document.createElement('button');
-                delBtn.className = 'btn-card-delete';
+                delBtn.className = 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 px-2 py-0.5 rounded transition font-medium';
                 delBtn.textContent = '🗑️ Remove';
                 delBtn.onclick = (e) => {
                     e.stopPropagation();
