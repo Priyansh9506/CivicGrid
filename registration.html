@@ -73,8 +73,21 @@
                 <!-- Address -->
                 <div>
                     <label for="address" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Residential Address</label>
-                    <textarea id="address" rows="3" placeholder="Enter your residential address" required
+                    <textarea id="address" rows="2" placeholder="Enter your residential address" required
                         class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition shadow-sm"></textarea>
+                </div>
+
+                <!-- RBAC System Role Selection -->
+                <div>
+                    <label for="role" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Assigned System Role (RBAC)
+                    </label>
+                    <select id="role" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition shadow-sm font-medium">
+                        <option value="citizen" selected>👤 Citizen (Report civic complaints, track issues, delete own complaints)</option>
+                        <option value="officer">🛡️ Field Officer (Inspect issues, update lifecycle statuses on Kanban)</option>
+                        <option value="admin">👑 Administrator (Full access: User management, role elevation, moderation)</option>
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-1">Select your access role in accordance with Municipal Access Control policies.</p>
                 </div>
                 
                 <button type="submit" 
@@ -96,7 +109,7 @@
     </div>
 
     <script>
-        // New users are stored in the MySQL `users` table (password is hashed on the server)
+        // New users are stored in the MySQL `users` table with their assigned RBAC role
         document.getElementById('registrationForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
@@ -107,7 +120,8 @@
                 aadharNumber: document.getElementById('aadharNumber').value,
                 emailId: document.getElementById('emailId').value,
                 password: document.getElementById('password').value,
-                address: document.getElementById('address').value
+                address: document.getElementById('address').value,
+                role: document.getElementById('role').value
             };
             
             try {

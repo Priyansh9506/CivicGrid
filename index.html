@@ -1,7 +1,8 @@
 <!--
-    Practical - 8: CivicGrid — Area-Wise Task Manager + Kanban Board
-    Description: Tailwind + Vue frontend backed by Node.js and MySQL (see server.js).
-                 Login, complaints (with photos) and Kanban status changes are stored in the database.
+    Practical - 9: CivicGrid — Role-Based Authentication and Access Control (RBAC) System
+    Description: Tailwind + Vue frontend with Node.js + MySQL backend.
+                 Three roles: Citizen, Officer, Admin with fine-grained permission checks.
+                 Login, complaints, Kanban status changes are all role-gated by the server.
                  Open through the server: npm start -> http://localhost:3000
 -->
 <!DOCTYPE html>
@@ -9,7 +10,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CivicGrid - Area-Wise Task Manager (Tailwind CSS)</title>
+    <title>CivicGrid - RBAC Area-Wise Task Manager (Practical 9)</title>
     <!-- Tailwind CSS Play CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -29,7 +30,7 @@
             }
         }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -57,6 +58,19 @@
             font-family: 'Inter', sans-serif;
             padding: 4px;
         }
+
+        /* RBAC role badge glow effects */
+        .role-badge-citizen { background: linear-gradient(135deg, #e0f2fe, #bae6fd); color: #0369a1; border: 1px solid #7dd3fc; }
+        .role-badge-officer { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #92400e; border: 1px solid #fbbf24; }
+        .role-badge-admin   { background: linear-gradient(135deg, #f3e8ff, #e9d5ff); color: #6b21a8; border: 1px solid #c084fc; }
+
+        .role-switcher-btn { transition: all 0.2s; }
+        .role-switcher-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .role-switcher-btn.active-role { ring: 2px; transform: scale(1.02); }
+
+        /* Permission denied fade */
+        .rbac-hidden { display: none !important; }
+        .rbac-disabled { opacity: 0.35; pointer-events: none; cursor: not-allowed; }
     </style>
 </head>
 <body class="bg-amber-50/40 min-h-screen text-slate-800 antialiased p-4 sm:p-8 flex justify-center">
@@ -72,7 +86,7 @@
                 <div>
                     <h2 class="text-xl font-bold text-slate-900 tracking-tight">CivicGrid</h2>
                     <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">
-                        Practical 8 • Node.js + MySQL
+                        Practical 9 • RBAC System
                     </span>
                 </div>
             </div>
@@ -96,12 +110,76 @@
             <p class="text-sm sm:text-base text-slate-500 font-medium">Area-Wise Task Management for Civic Authorities</p>
         </div>
 
-        <!-- User Session Header -->
-        <div id="userHeader" class="flex flex-wrap items-center justify-between gap-3 p-4 bg-orange-50/80 rounded-2xl border border-orange-200 text-sm">
-            <span id="welcomeMessage" class="font-bold text-brand-700">Welcome!</span>
-            <button onclick="signOut()" class="px-4 py-2 text-xs font-bold rounded-xl bg-red-600 text-white hover:bg-red-700 transition active:scale-95 shadow-sm">
-                Sign Out
-            </button>
+        <!-- RBAC Session Header with Role Badge + Role Switcher -->
+        <div id="userHeader" class="bg-orange-50/80 rounded-2xl border border-orange-200 text-sm overflow-hidden">
+            <!-- Row 1: Welcome + Role Badge + Sign Out -->
+            <div class="flex flex-wrap items-center justify-between gap-3 p-4">
+                <div class="flex items-center gap-3 flex-wrap">
+                    <span id="welcomeMessage" class="font-bold text-brand-700">Welcome!</span>
+                    <span id="roleBadge" class="role-badge-citizen px-3 py-1 rounded-full text-xs font-extrabold tracking-wide shadow-sm"></span>
+                </div>
+                <button onclick="signOut()" class="px-4 py-2 text-xs font-bold rounded-xl bg-red-600 text-white hover:bg-red-700 transition active:scale-95 shadow-sm">
+                    Sign Out
+                </button>
+            </div>
+
+            <!-- Row 2: Live Role Switcher (1-click demo switch without re-login) -->
+            <div class="flex flex-wrap items-center gap-2 px-4 pb-4 pt-1 border-t border-orange-200/60">
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1">⚡ Switch Role:</span>
+                <button onclick="switchDemoRole('citizen')" id="switchCitizen"
+                    class="role-switcher-btn px-3 py-1.5 rounded-lg bg-white border border-sky-200 text-sky-700 text-[11px] font-bold hover:bg-sky-50 active:scale-95">
+                    👤 Citizen
+                </button>
+                <button onclick="switchDemoRole('officer')" id="switchOfficer"
+                    class="role-switcher-btn px-3 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-700 text-[11px] font-bold hover:bg-amber-50 active:scale-95">
+                    🛡️ Officer
+                </button>
+                <button onclick="switchDemoRole('admin')" id="switchAdmin"
+                    class="role-switcher-btn px-3 py-1.5 rounded-lg bg-white border border-purple-200 text-purple-700 text-[11px] font-bold hover:bg-purple-50 active:scale-95">
+                    👑 Admin
+                </button>
+                <span id="roleDescription" class="text-[11px] text-slate-400 ml-auto hidden sm:inline"></span>
+            </div>
+        </div>
+
+        <!-- RBAC Permissions Matrix Panel (visible to all, educational) -->
+        <details id="rbacPanel" class="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden">
+            <summary class="p-4 cursor-pointer text-xs font-bold text-slate-700 uppercase tracking-wider hover:bg-slate-100 transition select-none flex items-center gap-2">
+                🔐 RBAC Permissions Matrix (Practical 9 Demonstration)
+                <span class="text-slate-400 font-normal normal-case tracking-normal">— Click to expand</span>
+            </summary>
+            <div class="px-4 pb-4">
+                <div class="overflow-x-auto">
+                    <table id="permissionsTable" class="w-full text-xs border-collapse mt-2">
+                        <thead>
+                            <tr class="bg-slate-200/60">
+                                <th class="text-left px-3 py-2 font-bold text-slate-700 rounded-tl-lg">Permission</th>
+                                <th class="text-center px-3 py-2 font-bold text-sky-700">👤 Citizen</th>
+                                <th class="text-center px-3 py-2 font-bold text-amber-700">🛡️ Officer</th>
+                                <th class="text-center px-3 py-2 font-bold text-purple-700 rounded-tr-lg">👑 Admin</th>
+                            </tr>
+                        </thead>
+                        <tbody id="permissionsBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+
+        <!-- ADMIN-ONLY: User Management Panel -->
+        <div id="adminPanel" class="rbac-hidden bg-purple-50/70 rounded-2xl border border-purple-200 overflow-hidden">
+            <div class="flex items-center justify-between p-4 border-b border-purple-200/60">
+                <h3 class="text-sm font-bold text-purple-800 uppercase tracking-wider flex items-center gap-2">
+                    👑 Admin Panel — User & Role Management
+                </h3>
+                <button onclick="loadAdminUsers()" class="px-3 py-1.5 rounded-lg bg-purple-600 text-white text-[11px] font-bold hover:bg-purple-700 transition active:scale-95">
+                    🔄 Refresh
+                </button>
+            </div>
+            <div id="adminUsersContainer" class="p-4">
+                <!-- Populated by JS -->
+            </div>
         </div>
 
         <!-- I. Geolocation API — Location Bar -->
@@ -207,8 +285,8 @@
                         </div>
                         
                         <div v-for="task in state.tasks.filter(t => t.status === col.id)" :key="task.id"
-                             :class="['kanban-card bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition space-y-2 relative', col.id === 'resolved' ? 'opacity-70 hover:opacity-100' : '']"
-                             draggable="true"
+                             :class="['kanban-card bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition space-y-2 relative', col.id === 'resolved' ? 'opacity-70 hover:opacity-100' : '', state.canUpdateStatus ? 'cursor-grab active:cursor-grabbing' : 'cursor-default']"
+                             :draggable="state.canUpdateStatus"
                              :data-task-id="task.id"
                              @dragstart="handleDragStart($event, task.id)"
                              @dragend="handleDragEnd">
@@ -224,11 +302,16 @@
 
                             <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
                                 <span class="text-slate-400 font-medium" v-format-date="task.createdAt"></span>
-                                <button class="text-slate-400 hover:text-rose-600 hover:bg-rose-50 px-2 py-0.5 rounded transition font-medium" @click.stop="removeTask(task.id)">🗑️ Remove</button>
+                                <button v-if="state.canDeleteAny || (state.canDeleteOwn && task.createdBy === state.userId)"
+                                    class="text-slate-400 hover:text-rose-600 hover:bg-rose-50 px-2 py-0.5 rounded transition font-medium" @click.stop="removeTask(task.id)">🗑️ Remove</button>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+            <!-- Kanban RBAC notice for citizens -->
+            <div v-if="!state.canUpdateStatus" class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 font-medium text-center">
+                🔒 Drag & drop is disabled for your role. Only Officers and Admins can update complaint statuses.
             </div>
         </div>
     </div>
@@ -245,17 +328,219 @@
     <!-- Map, list view and API calls to the Node.js + MySQL backend -->
     <script src="app.js"></script>
 
-    <!-- User Session Logic -->
+    <!-- User Session + RBAC Logic -->
     <script>
         if (location.protocol === 'file:') {
             alert('Start the server with "npm start" and open http://localhost:3000 — the app needs the Node.js + MySQL backend.');
         }
+
+        // Current user session state
+        let currentUser = null;
 
         async function signOut() {
             try {
                 await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
             } finally {
                 window.location.href = 'login.html';
+            }
+        }
+
+        // 1-Click Role Switcher — switches the entire session to a demo role account
+        async function switchDemoRole(role) {
+            try {
+                const res = await fetch('/api/auth/switch-demo-role', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ role })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(`⚡ Switched to ${data.user.roleMeta.badge}`);
+                    applyUserSession(data.user);
+                    await loadTasks();
+                    render();
+                } else {
+                    showToast(`⚠️ ${data.error}`);
+                }
+            } catch (err) {
+                showToast('⚠️ Could not switch role.');
+            }
+        }
+
+        // Apply user data and RBAC permissions to the entire UI
+        function applyUserSession(user) {
+            currentUser = user;
+            const role = user.role || 'citizen';
+            const meta = user.roleMeta || {};
+            const perms = user.permissions || [];
+
+            // Welcome message
+            document.getElementById('welcomeMessage').innerText = 'Welcome, ' + user.firstName + ' (' + user.emailId + ')!';
+
+            // Role badge
+            const badge = document.getElementById('roleBadge');
+            badge.innerText = meta.badge || '👤 Citizen';
+            badge.className = `role-badge-${role} px-3 py-1 rounded-full text-xs font-extrabold tracking-wide shadow-sm`;
+
+            // Role description
+            document.getElementById('roleDescription').innerText = meta.description || '';
+
+            // Highlight active role switcher button
+            ['Citizen', 'Officer', 'Admin'].forEach(r => {
+                const btn = document.getElementById('switch' + r);
+                if (btn) {
+                    btn.classList.toggle('ring-2', r.toLowerCase() === role);
+                    btn.classList.toggle('ring-offset-1', r.toLowerCase() === role);
+                    btn.classList.toggle('font-extrabold', r.toLowerCase() === role);
+                }
+            });
+
+            // Prefill reporter fields
+            document.getElementById('reporterName').value = user.firstName + ' ' + (user.lastName || '');
+            document.getElementById('reporterAadhar').value = user.aadharNumber || '';
+            document.getElementById('reporterResidence').value = user.address || '';
+
+            // RBAC visibility decisions
+            const canUpdateStatus = perms.includes('complaint:status:update');
+            const canDeleteAny = perms.includes('complaint:delete:any');
+            const canDeleteOwn = perms.includes('complaint:delete:own');
+            const canManageRoles = perms.includes('user:role:update');
+
+            // Admin panel
+            const adminPanel = document.getElementById('adminPanel');
+            if (canManageRoles) {
+                adminPanel.classList.remove('rbac-hidden');
+                loadAdminUsers();
+            } else {
+                adminPanel.classList.add('rbac-hidden');
+            }
+
+            // Push RBAC state into Vue
+            if (window.vueComponent) {
+                window.vueComponent.state.userRole = role;
+                window.vueComponent.state.userId = user.id;
+                window.vueComponent.state.canUpdateStatus = canUpdateStatus;
+                window.vueComponent.state.canDeleteAny = canDeleteAny;
+                window.vueComponent.state.canDeleteOwn = canDeleteOwn;
+            }
+
+            // Build permissions matrix table
+            buildPermissionsMatrix(user);
+        }
+
+        // Build the RBAC permissions matrix table
+        function buildPermissionsMatrix(user) {
+            const allPerms = [
+                { key: 'complaint:read', label: 'View Complaints' },
+                { key: 'complaint:create', label: 'Create Complaint' },
+                { key: 'complaint:status:update', label: 'Update Status (Kanban/List)' },
+                { key: 'complaint:delete:own', label: 'Delete Own Complaint' },
+                { key: 'complaint:delete:any', label: 'Delete Any Complaint' },
+                { key: 'complaint:inspect', label: 'Inspect Complaint Details' },
+                { key: 'user:read', label: 'View All Users' },
+                { key: 'user:role:update', label: 'Manage User Roles' },
+                { key: 'rbac:audit', label: 'System Audit Log' },
+                { key: 'profile:read', label: 'View Own Profile' }
+            ];
+            const rolePerms = {
+                citizen: ['profile:read', 'complaint:read', 'complaint:create', 'complaint:delete:own'],
+                officer: ['profile:read', 'complaint:read', 'complaint:create', 'complaint:status:update', 'complaint:inspect'],
+                admin: ['profile:read', 'complaint:read', 'complaint:create', 'complaint:status:update', 'complaint:delete:own', 'complaint:delete:any', 'complaint:inspect', 'user:read', 'user:role:update', 'rbac:audit']
+            };
+
+            const tbody = document.getElementById('permissionsBody');
+            tbody.innerHTML = '';
+            const currentRole = user.role || 'citizen';
+
+            allPerms.forEach((p, i) => {
+                const row = document.createElement('tr');
+                row.className = i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
+
+                const hasC = rolePerms.citizen.includes(p.key);
+                const hasO = rolePerms.officer.includes(p.key);
+                const hasA = rolePerms.admin.includes(p.key);
+                const isActive = (user.permissions || []).includes(p.key);
+
+                row.innerHTML = `
+                    <td class="px-3 py-2 font-semibold text-slate-700 ${isActive ? '' : 'text-slate-400'}">${isActive ? '🟢' : '🔴'} ${p.label}</td>
+                    <td class="text-center px-3 py-2 ${currentRole === 'citizen' ? 'font-bold' : ''}">${hasC ? '✅' : '❌'}</td>
+                    <td class="text-center px-3 py-2 ${currentRole === 'officer' ? 'font-bold' : ''}">${hasO ? '✅' : '❌'}</td>
+                    <td class="text-center px-3 py-2 ${currentRole === 'admin' ? 'font-bold' : ''}">${hasA ? '✅' : '❌'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Admin Panel: Load all system users
+        async function loadAdminUsers() {
+            try {
+                const data = await api('/api/admin/users');
+                const container = document.getElementById('adminUsersContainer');
+                if (!data.length) {
+                    container.innerHTML = '<p class="text-xs text-slate-400">No users found.</p>';
+                    return;
+                }
+                container.innerHTML = `
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-purple-100/60 text-purple-800">
+                                    <th class="px-3 py-2 text-left font-bold">ID</th>
+                                    <th class="px-3 py-2 text-left font-bold">Name</th>
+                                    <th class="px-3 py-2 text-left font-bold">Email</th>
+                                    <th class="px-3 py-2 text-center font-bold">Role</th>
+                                    <th class="px-3 py-2 text-center font-bold">Complaints</th>
+                                    <th class="px-3 py-2 text-center font-bold">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.map(u => `
+                                    <tr class="border-t border-purple-100 hover:bg-purple-50/50">
+                                        <td class="px-3 py-2 text-slate-500">${u.id}</td>
+                                        <td class="px-3 py-2 font-semibold text-slate-800">${escapeHtml(u.name)}</td>
+                                        <td class="px-3 py-2 text-slate-600">${escapeHtml(u.email)}</td>
+                                        <td class="px-3 py-2 text-center">
+                                            <span class="role-badge-${u.role} px-2 py-0.5 rounded-full text-[10px] font-bold">${u.roleMeta?.badge || u.role}</span>
+                                        </td>
+                                        <td class="px-3 py-2 text-center font-bold text-slate-600">${u.complaintsCount}</td>
+                                        <td class="px-3 py-2 text-center">
+                                            <select onchange="changeUserRole(${u.id}, this.value)" class="text-[11px] px-2 py-1 rounded-lg border border-purple-200 bg-white text-purple-700 font-bold">
+                                                <option value="citizen" ${u.role === 'citizen' ? 'selected' : ''}>👤 Citizen</option>
+                                                <option value="officer" ${u.role === 'officer' ? 'selected' : ''}>🛡️ Officer</option>
+                                                <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (err) {
+                showToast(`⚠️ ${err.message}`);
+            }
+        }
+
+        // Admin: Change a user's role
+        async function changeUserRole(userId, newRole) {
+            try {
+                const res = await fetch(`/api/admin/users/${userId}/role`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ role: newRole })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(`✅ ${data.message}`);
+                    loadAdminUsers();
+                } else {
+                    showToast(`⚠️ ${data.error}`);
+                    loadAdminUsers();
+                }
+            } catch (err) {
+                showToast('⚠️ Could not update role.');
             }
         }
 
@@ -266,7 +551,6 @@
                 window.vueComponent.state.currentView = view;
             }
 
-            // Note: Kanban view display is handled by Vue v-show
             document.getElementById('listView').style.display = view === 'list' ? '' : 'none';
 
             const btnList = document.getElementById('btnListView');
@@ -292,12 +576,19 @@
                             { id: 'reported',   label: '📋 Reported' },
                             { id: 'inprogress', label: '🔧 In Progress' },
                             { id: 'resolved',   label: '✅ Resolved' }
-                        ]
+                        ],
+                        // RBAC state pushed from applyUserSession()
+                        userRole: 'citizen',
+                        userId: null,
+                        canUpdateStatus: false,
+                        canDeleteAny: false,
+                        canDeleteOwn: false
                     }
                 }
             },
             methods: {
                 handleDragStart(e, id) {
+                    if (!this.state.canUpdateStatus) { e.preventDefault(); return; }
                     window.draggedTaskId = id.toString();
                     e.dataTransfer.setData('text/plain', id);
                     e.dataTransfer.effectAllowed = 'move';
@@ -308,6 +599,7 @@
                     window.draggedTaskId = null;
                 },
                 handleDragOver(e) {
+                    if (!this.state.canUpdateStatus) return;
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
                     e.currentTarget.classList.add('bg-orange-50', 'border-brand-500');
@@ -320,10 +612,10 @@
                 async handleDrop(e, status) {
                     e.preventDefault();
                     e.currentTarget.classList.remove('bg-orange-50', 'border-brand-500');
+                    if (!this.state.canUpdateStatus) return;
                     const taskId = parseInt(e.dataTransfer.getData('text/plain'));
                     const task = window.tasks.find(t => t.id === taskId);
                     if (task && task.status !== status) {
-                        // Saves the new status + a history row in MySQL
                         if (await window.updateTaskStatus(taskId, status, 'kanban')) {
                             window.showToast(`✨ Moved to ${status}`);
                         }
@@ -339,7 +631,6 @@
         vueApp.directive('uppercase-click', {
             mounted(el) {
                 el.addEventListener('click', () => {
-                    // Non-destructive uppercase styling to preserve nested elements like the pulse-dot span
                     el.style.textTransform = 'uppercase';
                 });
             }
@@ -383,10 +674,7 @@
                 return;
             }
             const { user } = await res.json();
-            document.getElementById('welcomeMessage').innerText = 'Welcome, ' + user.firstName + ' (' + user.emailId + ')!';
-            document.getElementById('reporterName').value = user.firstName + ' ' + (user.lastName || '');
-            document.getElementById('reporterAadhar').value = user.aadharNumber || '';
-            document.getElementById('reporterResidence').value = user.address || '';
+            applyUserSession(user);
 
             await initApp();
             switchView('list');

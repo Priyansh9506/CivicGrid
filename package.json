@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "setup": "node connection/setup.js",
-    "crud-demo": "node connection/crud-demo.js"
+    "crud-demo": "node connection/crud-demo.js",
+    "rbac-demo": "node connection/rbac-demo.js"
   },
   "keywords": [],
   "author": "Priyansh9506",

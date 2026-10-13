@@ -10,6 +10,7 @@
 const mysql = require('mysql2');
 const config = require('./config');
 const { TABLES, ZONES, SAMPLE_COMPLAINTS } = require('./schema');
+const { DEMO_USERS, hashPassword } = require('./rbac');
 
 // Images are stored in MySQL, so allow packets up to 16 MB (XAMPP ships with 1 MB)
 const MAX_PACKET_BYTES = 16 * 1024 * 1024;
@@ -58,24 +59,49 @@ async function initDatabase({ log = () => {} } = {}) {
             log(`Table '${table.name}' created or already exists`);
         }
 
+        // Ensure `role` column exists in `users` (migration for existing Practical 8 databases)
+        const cols = await run(connection, `SHOW COLUMNS FROM users LIKE 'role'`);
+        if (!cols.length) {
+            await run(connection, `ALTER TABLE users ADD COLUMN role ENUM('citizen', 'officer', 'admin') NOT NULL DEFAULT 'citizen' AFTER password_hash`);
+            log("Migrated 'users' table: added 'role' column");
+        }
+
+        // Seed demo RBAC users (Citizen, Officer, Admin)
+        for (const demo of DEMO_USERS) {
+            const existing = await run(connection, 'SELECT id FROM users WHERE email = ?', [demo.emailId]);
+            if (!existing.length) {
+                await run(connection,
+                    `INSERT INTO users (first_name, last_name, mobile_number, aadhar_number, email, password_hash, role, address)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [demo.firstName, demo.lastName, demo.mobileNumber, demo.aadharNumber,
+                     demo.emailId, hashPassword(demo.password), demo.role, demo.address]);
+                log(`Created demo RBAC user: ${demo.emailId} (${demo.role})`);
+            } else {
+                await run(connection, 'UPDATE users SET role = ? WHERE email = ?', [demo.role, demo.emailId]);
+            }
+        }
+
         // Seed the zones lookup table (INSERT IGNORE skips rows that already exist)
         await run(connection, 'INSERT IGNORE INTO zones (name, lat, lng) VALUES ?', [ZONES]);
 
         // Seed sample complaints only into an empty table
         const [{ total }] = await run(connection, 'SELECT COUNT(*) AS total FROM complaints');
         if (total === 0) {
+            const adminUser = await run(connection, 'SELECT id FROM users WHERE email = ?', ['admin@civicgrid.org']);
+            const adminId = adminUser.length ? adminUser[0].id : null;
+
             for (const [description, zone, status] of SAMPLE_COMPLAINTS) {
                 const result = await run(connection,
                     `INSERT INTO complaints
-                        (zone_id, description, reporter_name, reporter_aadhar, reporter_age,
+                        (user_id, zone_id, description, reporter_name, reporter_aadhar, reporter_age,
                          reporter_gender, reporter_residence, status, location_label, latitude, longitude)
-                     SELECT id, ?, 'CivicGrid Admin', '000000000000', 30, 'Other', 'Municipal Office', ?, name, lat, lng
+                     SELECT ?, id, ?, 'CivicGrid Admin', '000000000000', 30, 'Other', 'Municipal Office', ?, name, lat, lng
                      FROM zones WHERE name = ?`,
-                    [description, status, zone]);
+                    [adminId, description, status, zone]);
                 await run(connection,
-                    `INSERT INTO complaint_status_history (complaint_id, old_status, new_status, source)
-                     VALUES (?, NULL, ?, 'seed')`,
-                    [result.insertId, status]);
+                    `INSERT INTO complaint_status_history (complaint_id, old_status, new_status, changed_by, source)
+                     VALUES (?, NULL, ?, ?, 'seed')`,
+                    [result.insertId, status, adminId]);
             }
             log(`Inserted ${SAMPLE_COMPLAINTS.length} sample complaints`);
         }

@@ -3,45 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CivicGrid Sign In - Tailwind CSS</title>
+    <title>CivicGrid Sign In - Role-Based Access Control (RBAC)</title>
     <!-- Tailwind CSS Play CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
 <body class="bg-slate-100 min-h-screen flex items-center justify-center p-4 antialiased">
-    <div class="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+    <div class="w-full max-w-lg bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden my-6">
         <!-- Header Banner -->
-        <div class="bg-gradient-to-r from-orange-500 to-amber-500 p-8 text-center text-white">
+        <div class="bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 p-8 text-center text-white">
             <h2 class="text-3xl font-extrabold tracking-tight">CivicGrid</h2>
-            <p class="text-orange-100 text-sm font-medium mt-1">Sign In to Your Account</p>
-            <span class="inline-block mt-3 px-3 py-1 bg-white/20 text-white rounded-full text-xs font-semibold backdrop-blur-sm">
-                Practical 6 • Tailwind CSS
+            <p class="text-orange-100 text-sm font-medium mt-1">Role-Based Authentication & Access Control (RBAC)</p>
+            <span class="inline-block mt-3 px-3 py-1 bg-white/20 text-white rounded-full text-xs font-semibold backdrop-blur-sm shadow-sm">
+                Practical 9 • RBAC (Citizen • Officer • Admin)
             </span>
         </div>
 
         <!-- Form Body -->
         <div class="p-8 space-y-6">
-            <form id="loginForm" class="space-y-5">
+
+            <!-- 1-Click Demo Credentials Quick-Select (Viva & Grading shortcut) -->
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">⚡ 1-Click Demo Roles:</span>
+                    <span class="text-[11px] text-slate-400 font-medium">Click to instant sign-in</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <button type="button" onclick="quickLogin('citizen@civicgrid.org', 'Citizen@123', 'Citizen')"
+                        class="px-2.5 py-2 rounded-xl bg-white border border-sky-200 text-sky-700 hover:bg-sky-50 transition text-xs font-bold flex flex-col items-center gap-0.5 shadow-sm active:scale-95">
+                        <span class="text-base">👤</span>
+                        <span>Citizen</span>
+                    </button>
+                    <button type="button" onclick="quickLogin('officer@civicgrid.org', 'Officer@123', 'Officer')"
+                        class="px-2.5 py-2 rounded-xl bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 transition text-xs font-bold flex flex-col items-center gap-0.5 shadow-sm active:scale-95">
+                        <span class="text-base">🛡️</span>
+                        <span>Officer</span>
+                    </button>
+                    <button type="button" onclick="quickLogin('admin@civicgrid.org', 'Admin@123', 'Admin')"
+                        class="px-2.5 py-2 rounded-xl bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 transition text-xs font-bold flex flex-col items-center gap-0.5 shadow-sm active:scale-95">
+                        <span class="text-base">👑</span>
+                        <span>Admin</span>
+                    </button>
+                </div>
+            </div>
+
+            <form id="loginForm" class="space-y-4">
                 <!-- Email ID -->
                 <div>
-                    <label for="emailId" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Email ID</label>
+                    <label for="emailId" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Email ID</label>
                     <input type="email" id="emailId" placeholder="Enter your email address" required
                         class="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition shadow-sm placeholder:text-slate-400">
                 </div>
                 
                 <!-- Password -->
                 <div>
-                    <label for="password" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Password</label>
+                    <label for="password" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Password</label>
                     <input type="password" id="password" placeholder="Enter your password" required
                         class="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition shadow-sm placeholder:text-slate-400">
                 </div>
                 
-                <button type="submit" 
+                <button type="submit" id="submitBtn"
                     class="w-full py-3.5 px-4 rounded-xl bg-orange-500 text-white font-bold text-sm shadow-lg shadow-orange-500/25 hover:bg-orange-600 active:scale-[0.98] transition">
-                    Sign In
+                    Sign In with RBAC
                 </button>
                 
                 <div class="text-center text-xs text-slate-500 pt-2 flex flex-col gap-2">
@@ -58,12 +84,10 @@
     </div>
 
     <script>
-        // Credentials are checked against the MySQL `users` table; the server sets a session cookie
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const email = document.getElementById('emailId').value;
-            const password = document.getElementById('password').value;
+        async function doLogin(email, password, roleLabel) {
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerText = 'Signing In...';
 
             try {
                 const res = await fetch('/api/auth/login', {
@@ -75,14 +99,30 @@
                 const data = await res.json();
 
                 if (res.ok) {
-                    alert('Sign In Successful! Welcome back ' + data.user.firstName + '!');
+                    const role = data.user.role ? data.user.role.toUpperCase() : 'CITIZEN';
                     window.location.href = 'index.html';
                 } else {
                     alert(data.error || 'Invalid Email ID or Password. Please try again.');
                 }
             } catch (err) {
                 alert('Cannot reach the CivicGrid server. Start it with "npm start" and open http://localhost:3000');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Sign In with RBAC';
             }
+        }
+
+        function quickLogin(email, password, roleLabel) {
+            document.getElementById('emailId').value = email;
+            document.getElementById('password').value = password;
+            doLogin(email, password, roleLabel);
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('emailId').value.trim();
+            const password = document.getElementById('password').value;
+            doLogin(email, password, null);
         });
     </script>
 </body>

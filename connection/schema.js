@@ -17,6 +17,7 @@ const TABLES = [
             aadhar_number CHAR(12)     NOT NULL UNIQUE,
             email         VARCHAR(255) NOT NULL UNIQUE,
             password_hash VARCHAR(255) NOT NULL,
+            role          ENUM('citizen', 'officer', 'admin') NOT NULL DEFAULT 'citizen',
             address       TEXT         NOT NULL,
             created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

@@ -1,8 +1,9 @@
 /*
- * Practical - 8: CivicGrid — Area-Wise Task Manager + Kanban Board
- * Description: Same UI as Practical 4-7 (Geolocation, Drag and Drop, Leaflet map, Vue Kanban),
- *              but complaints are now stored in MySQL through the Node.js API in server.js
- *              instead of Local Storage.
+ * Practical - 9: CivicGrid — Area-Wise Task Manager + Kanban Board + RBAC
+ * Description: Role-Based Authentication and Access Control layered over
+ *              Geolocation, Drag and Drop, Leaflet map, Vue Kanban.
+ *              Status changes are restricted to Officers/Admins.
+ *              Deletion is owner-only for Citizens, universal for Admins.
  */
 
 // ── State ──
@@ -485,20 +486,40 @@ function renderListView() {
             }
 
             const actions = document.createElement('div');
-            actions.className = 'actions flex items-center gap-2 self-end sm:self-center';
+            actions.className = 'actions flex flex-col items-end gap-2 self-end sm:self-center';
 
-            const toggleBtn = document.createElement('button');
-            toggleBtn.className = task.completed ? 'px-4 py-2 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-xl text-xs font-bold transition' : 'px-4 py-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-xl text-xs font-bold transition';
-            toggleBtn.textContent = task.completed ? 'Undo' : 'Complete';
-            toggleBtn.onclick = () => toggleTask(task.id);
+            // RBAC: Complete/Undo button only visible to Officer & Admin
+            const vue = window.vueComponent;
+            const canUpdateStatus = vue && vue.state.canUpdateStatus;
+            const canDeleteAny = vue && vue.state.canDeleteAny;
+            const canDeleteOwn = vue && vue.state.canDeleteOwn;
+            const userId = vue && vue.state.userId;
+            const isOwner = task.createdBy === userId;
 
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'px-4 py-2 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded-xl text-xs font-bold transition';
-            deleteBtn.textContent = 'Remove';
-            deleteBtn.onclick = () => removeTask(task.id);
+            if (canUpdateStatus) {
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = task.completed ? 'px-4 py-2 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-xl text-xs font-bold transition' : 'px-4 py-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-xl text-xs font-bold transition';
+                toggleBtn.textContent = task.completed ? 'Undo' : 'Complete';
+                toggleBtn.onclick = () => toggleTask(task.id);
+                actions.appendChild(toggleBtn);
+            }
 
-            actions.appendChild(toggleBtn);
-            actions.appendChild(deleteBtn);
+            // RBAC: Remove button — Admin (any), Citizen (own only)
+            if (canDeleteAny || (canDeleteOwn && isOwner)) {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'px-4 py-2 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded-xl text-xs font-bold transition';
+                deleteBtn.textContent = 'Remove';
+                deleteBtn.onclick = () => removeTask(task.id);
+                actions.appendChild(deleteBtn);
+            }
+
+            // If no actions available, show a lock icon
+            if (!actions.children.length) {
+                const lockMsg = document.createElement('span');
+                lockMsg.className = 'text-[11px] text-slate-400 font-medium';
+                lockMsg.textContent = '🔒 Read Only';
+                actions.appendChild(lockMsg);
+            }
 
             li.appendChild(taskContent);
             li.appendChild(actions);

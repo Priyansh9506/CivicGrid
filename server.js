@@ -1,11 +1,17 @@
 /*
- * Practical - 8: CivicGrid backend — Node.js + Express + MySQL
- * Replaces the browser Local Storage with MySQL for:
- *   - registration, login and sessions            (users, sessions)
- *   - complaint creation incl. the uploaded photo (complaints.image LONGBLOB)
- *   - Kanban drag & drop / list status changes    (complaints.status + complaint_status_history)
+ * Practical - 9: CivicGrid — Role-Based Authentication and Access Control (RBAC) Backend
+ * Built with Node.js, Express, and MySQL.
  *
- * Start:  npm start   then open http://localhost:3000
+ * Implements:
+ *   - 3 System Roles: Citizen (1), Field Officer (2), Administrator (3)
+ *   - Fine-grained Permissions & Middleware: requireAuth, requireRole, requirePermission
+ *   - RBAC protected endpoints:
+ *       * Status updates (Kanban drag & drop / List): Officers & Admins only
+ *       * Complaint deletion: Admins (all) or Citizens (own complaints only)
+ *       * User Management & Role Switching: Admins only
+ *       * Fast 1-click Demo Role Switcher for live viva evaluation
+ *
+ * Start: npm start  -> http://localhost:3000
  */
 
 const crypto = require('crypto');
@@ -16,6 +22,15 @@ const { initDatabase, closeConnection } = require('./connection/setup');
 const { query, transaction } = require('./connection/db');
 const { selectAll, deleteRecord } = require('./connection/crud');
 const { explainDbError } = require('./connection/config');
+const {
+    ROLES,
+    ROLE_LIST,
+    PERMISSIONS,
+    ROLE_PERMISSIONS,
+    ROLE_METADATA,
+    DEMO_USERS,
+    hasPermission
+} = require('./connection/rbac');
 
 const PORT = Number(process.env.PORT) || 3000;
 const SESSION_COOKIE = 'civicgrid_session';
@@ -41,7 +56,7 @@ class HttpError extends Error {
 }
 
 // =======================================================
-// AUTH HELPERS — password hashing and cookie sessions
+// AUTH & RBAC HELPERS — hashing, sessions & access control
 // =======================================================
 
 function hashPassword(password) {
@@ -72,6 +87,7 @@ function setSessionCookie(res, token, maxAgeSeconds) {
 }
 
 function toUser(row) {
+    const role = row.role || ROLES.CITIZEN;
     return {
         id: row.id,
         firstName: row.first_name,
@@ -79,11 +95,14 @@ function toUser(row) {
         mobileNumber: row.mobile_number,
         aadharNumber: row.aadhar_number,
         emailId: row.email,
+        role: role,
+        roleMeta: ROLE_METADATA[role] || ROLE_METADATA[ROLES.CITIZEN],
+        permissions: ROLE_PERMISSIONS[role] || [],
         address: row.address
     };
 }
 
-// Attach req.user when the session cookie is valid, otherwise respond 401
+// Authenticates current session cookie and attaches req.user
 async function requireAuth(req, res, next) {
     const token = readCookie(req, SESSION_COOKIE);
     if (token) {
@@ -99,12 +118,43 @@ async function requireAuth(req, res, next) {
     res.status(401).json({ error: 'Please sign in.' });
 }
 
+// RBAC Middleware: Enforces that the user has at least one of the allowed roles
+function requireRole(...allowedRoles) {
+    return (req, res, next) => {
+        if (!req.user) return res.status(401).json({ error: 'Please sign in.' });
+        const userRole = req.user.role || ROLES.CITIZEN;
+        if (!allowedRoles.includes(userRole)) {
+            return res.status(403).json({
+                error: `Access Denied: Requires role [${allowedRoles.join(' or ')}]. Your current role is [${userRole}].`,
+                requiredRoles: allowedRoles,
+                userRole
+            });
+        }
+        next();
+    };
+}
+
+// RBAC Middleware: Enforces that the user's role has a specific fine-grained permission
+function requirePermission(permission) {
+    return (req, res, next) => {
+        if (!req.user) return res.status(401).json({ error: 'Please sign in.' });
+        const userRole = req.user.role || ROLES.CITIZEN;
+        if (hasPermission(userRole, permission)) return next();
+        return res.status(403).json({
+            error: `Access Denied: Role '${userRole}' lacks permission '${permission}'.`,
+            requiredPermission: permission,
+            userRole
+        });
+    };
+}
+
 // =======================================================
-// AUTH ROUTES — register, login, current user, logout
+// AUTH ROUTES — register, login, me, roles, logout & demo switcher
 // =======================================================
 
 app.post('/api/auth/register', async (req, res) => {
     const b = req.body || {};
+    const role = ROLE_LIST.includes(b.role) ? b.role : ROLES.CITIZEN;
     const user = {
         firstName: String(b.firstName || '').trim(),
         lastName: String(b.lastName || '').trim(),
@@ -112,7 +162,8 @@ app.post('/api/auth/register', async (req, res) => {
         aadharNumber: String(b.aadharNumber || '').trim(),
         emailId: String(b.emailId || '').trim().toLowerCase(),
         password: String(b.password || ''),
-        address: String(b.address || '').trim()
+        address: String(b.address || '').trim(),
+        role
     };
 
     if (!user.firstName || !user.lastName || !user.address) throw new HttpError(400, 'Please fill in all fields.');
@@ -123,10 +174,10 @@ app.post('/api/auth/register', async (req, res) => {
 
     try {
         await query(
-            `INSERT INTO users (first_name, last_name, mobile_number, aadhar_number, email, password_hash, address)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO users (first_name, last_name, mobile_number, aadhar_number, email, password_hash, role, address)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [user.firstName, user.lastName, user.mobileNumber, user.aadharNumber,
-             user.emailId, hashPassword(user.password), user.address]);
+             user.emailId, hashPassword(user.password), user.role, user.address]);
     } catch (err) {
         if (err.code === 'ER_DUP_ENTRY') {
             throw new HttpError(409, /aadhar/.test(err.message)
@@ -167,16 +218,49 @@ app.post('/api/auth/logout', requireAuth, async (req, res) => {
     res.json({ message: 'Signed out.' });
 });
 
+// Returns the full RBAC roles and permissions schema for UI rendering
+app.get('/api/auth/roles', (req, res) => {
+    res.json({
+        roles: ROLE_LIST,
+        metadata: ROLE_METADATA,
+        permissions: ROLE_PERMISSIONS,
+        allPermissions: Object.values(PERMISSIONS)
+    });
+});
+
+// 1-Click Demo Role Switcher (Practical 9 viva & evaluation helper)
+app.post('/api/auth/switch-demo-role', async (req, res) => {
+    const targetRole = req.body?.role;
+    if (!ROLE_LIST.includes(targetRole)) throw new HttpError(400, 'Invalid role.');
+
+    const rows = await query('SELECT * FROM users WHERE role = ? ORDER BY id LIMIT 1', [targetRole]);
+    if (!rows.length) throw new HttpError(404, `No demo account found for role ${targetRole}.`);
+
+    const user = rows[0];
+    const token = crypto.randomBytes(32).toString('hex');
+    await query('DELETE FROM sessions WHERE expires_at <= NOW()');
+    await query(
+        'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, NOW() + INTERVAL ? DAY)',
+        [token, user.id, SESSION_DAYS]);
+
+    setSessionCookie(res, token, SESSION_DAYS * 24 * 60 * 60);
+    res.json({
+        message: `Active session switched to ${ROLE_METADATA[targetRole].name}`,
+        user: toUser(user)
+    });
+});
+
 // =======================================================
-// COMPLAINT ROUTES — list, create (with image), status change, delete
+// COMPLAINT ROUTES — with RBAC checks
 // =======================================================
 
 const COMPLAINT_COLUMNS = `
     c.id, c.user_id, c.description, z.name AS zone_name, c.reporter_name, c.reporter_aadhar,
     c.reporter_age, c.reporter_gender, c.reporter_residence, c.status, c.location_label,
-    c.latitude, c.longitude, c.image IS NOT NULL AS has_image, c.created_at, c.updated_at`;
+    c.latitude, c.longitude, c.image IS NOT NULL AS has_image, c.created_at, c.updated_at,
+    u.role AS creator_role, CONCAT(u.first_name, ' ', u.last_name) AS creator_name`;
 
-// Shape a DB row like the task objects the frontend already renders
+// Shape a DB row like the task objects the frontend renders
 function toTask(r) {
     return {
         id: r.id,
@@ -195,13 +279,19 @@ function toTask(r) {
         location: r.location_label,
         coords: r.latitude != null ? { lat: Number(r.latitude), lng: Number(r.longitude) } : null,
         createdBy: r.user_id,
+        creatorName: r.creator_name || null,
+        creatorRole: r.creator_role || 'citizen',
         createdAt: new Date(r.created_at).getTime()
     };
 }
 
 async function getComplaint(id) {
     const rows = await query(
-        `SELECT ${COMPLAINT_COLUMNS} FROM complaints c JOIN zones z ON z.id = c.zone_id WHERE c.id = ?`, [id]);
+        `SELECT ${COMPLAINT_COLUMNS}
+         FROM complaints c
+         JOIN zones z ON z.id = c.zone_id
+         LEFT JOIN users u ON u.id = c.user_id
+         WHERE c.id = ?`, [id]);
     if (!rows.length) throw new HttpError(404, 'Complaint not found.');
     return rows[0];
 }
@@ -210,13 +300,19 @@ app.get('/api/zones', requireAuth, async (req, res) => {
     res.json(await selectAll('zones', { orderBy: 'id' }));
 });
 
+// All authenticated users can view complaints feed
 app.get('/api/complaints', requireAuth, async (req, res) => {
     const rows = await query(
-        `SELECT ${COMPLAINT_COLUMNS} FROM complaints c JOIN zones z ON z.id = c.zone_id ORDER BY c.created_at, c.id`);
+        `SELECT ${COMPLAINT_COLUMNS}
+         FROM complaints c
+         JOIN zones z ON z.id = c.zone_id
+         LEFT JOIN users u ON u.id = c.user_id
+         ORDER BY c.created_at DESC, c.id DESC`);
     res.json(rows.map(toTask));
 });
 
-app.post('/api/complaints', requireAuth, upload.single('image'), async (req, res) => {
+// All authenticated roles (Citizen, Officer, Admin) can create complaints
+app.post('/api/complaints', requireAuth, requirePermission(PERMISSIONS.COMPLAINT_CREATE), upload.single('image'), async (req, res) => {
     const b = req.body || {};
     const text = String(b.text || '').trim();
     const name = String(b.reporterName || '').trim();
@@ -235,7 +331,6 @@ app.post('/api/complaints', requireAuth, upload.single('image'), async (req, res
     if (!zones.length) throw new HttpError(400, 'Please select a valid area.');
     const zone = zones[0];
 
-    // Use the pin/GPS coordinates when given, else fall back to the zone centre
     const lat = parseFloat(b.lat);
     const lng = parseFloat(b.lng);
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
@@ -261,7 +356,7 @@ app.post('/api/complaints', requireAuth, upload.single('image'), async (req, res
     res.status(201).json(toTask(await getComplaint(id)));
 });
 
-// Serve the photo stored in MySQL
+// Photo retrieval
 app.get('/api/complaints/:id/image', requireAuth, async (req, res) => {
     const rows = await query('SELECT image, image_mime FROM complaints WHERE id = ?', [req.params.id]);
     if (!rows.length || !rows[0].image) throw new HttpError(404, 'Image not found.');
@@ -270,8 +365,8 @@ app.get('/api/complaints/:id/image', requireAuth, async (req, res) => {
     res.send(rows[0].image);
 });
 
-// Drag & drop on the Kanban board and Complete/Undo in the list both land here
-app.patch('/api/complaints/:id/status', requireAuth, async (req, res) => {
+// RBAC Protected Status Updates: Only Officers and Admins can advance status on Kanban or List
+app.patch('/api/complaints/:id/status', requireAuth, requireRole(ROLES.OFFICER, ROLES.ADMIN), async (req, res) => {
     const status = req.body?.status;
     const source = req.body?.source === 'kanban' ? 'kanban' : 'list';
     if (!STATUSES.includes(status)) throw new HttpError(400, 'Invalid status.');
@@ -290,23 +385,112 @@ app.patch('/api/complaints/:id/status', requireAuth, async (req, res) => {
     res.json(toTask(await getComplaint(req.params.id)));
 });
 
+// Complaint Status Audit Trail
 app.get('/api/complaints/:id/history', requireAuth, async (req, res) => {
     const rows = await query(
         `SELECT h.old_status, h.new_status, h.source, h.changed_at,
-                CONCAT(u.first_name, ' ', u.last_name) AS changed_by
-         FROM complaint_status_history h LEFT JOIN users u ON u.id = h.changed_by
-         WHERE h.complaint_id = ? ORDER BY h.changed_at, h.id`, [req.params.id]);
+                CONCAT(u.first_name, ' ', u.last_name) AS changed_by,
+                u.role AS changer_role
+         FROM complaint_status_history h
+         LEFT JOIN users u ON u.id = h.changed_by
+         WHERE h.complaint_id = ? ORDER BY h.changed_at DESC, h.id DESC`, [req.params.id]);
     res.json(rows);
 });
 
+// RBAC Protected Deletion:
+// - Admin: can delete any complaint
+// - Citizen: can delete ONLY their own reported complaint
+// - Officer: cannot delete complaints (preserves official audit records)
 app.delete('/api/complaints/:id', requireAuth, async (req, res) => {
+    const complaint = await getComplaint(req.params.id);
+    const userRole = req.user.role || ROLES.CITIZEN;
+    const isOwner = complaint.user_id === req.user.id;
+
+    if (userRole === ROLES.ADMIN) {
+        // Universal delete permission
+    } else if (userRole === ROLES.CITIZEN && isOwner) {
+        // Citizen deleting their own complaint
+    } else if (userRole === ROLES.CITIZEN && !isOwner) {
+        throw new HttpError(403, 'Access Denied: Citizens are only permitted to delete their own reported complaints.');
+    } else {
+        throw new HttpError(403, 'Access Denied: Field Officers cannot delete complaints. Contact an Administrator.');
+    }
+
     const deleted = await deleteRecord('complaints', { id: req.params.id });
     if (!deleted) throw new HttpError(404, 'Complaint not found.');
     res.json({ message: 'Complaint removed.' });
 });
 
 // =======================================================
-// STATIC FRONTEND — HTML pages, app.js and bootstrap (never the server code)
+// ADMIN MANAGEMENT ROUTES (Protected by requireRole(ADMIN))
+// =======================================================
+
+// List all registered system users and their roles
+app.get('/api/admin/users', requireAuth, requireRole(ROLES.ADMIN), async (req, res) => {
+    const rows = await query(
+        `SELECT u.id, u.first_name, u.last_name, u.mobile_number, u.aadhar_number,
+                u.email, u.role, u.address, u.created_at,
+                COUNT(c.id) AS complaints_count
+         FROM users u
+         LEFT JOIN complaints c ON c.user_id = u.id
+         GROUP BY u.id
+         ORDER BY u.id`
+    );
+    res.json(rows.map(r => ({
+        id: r.id,
+        name: `${r.first_name} ${r.last_name}`,
+        email: r.email,
+        mobile: r.mobile_number,
+        aadhar: r.aadhar_number,
+        role: r.role,
+        roleMeta: ROLE_METADATA[r.role] || ROLE_METADATA[ROLES.CITIZEN],
+        address: r.address,
+        complaintsCount: Number(r.complaints_count || 0),
+        createdAt: r.created_at
+    })));
+});
+
+// Update a user's role (Admin only)
+app.patch('/api/admin/users/:id/role', requireAuth, requireRole(ROLES.ADMIN), async (req, res) => {
+    const targetId = parseInt(req.params.id);
+    const newRole = req.body?.role;
+    if (!ROLE_LIST.includes(newRole)) throw new HttpError(400, 'Invalid role.');
+
+    const existing = await query('SELECT * FROM users WHERE id = ?', [targetId]);
+    if (!existing.length) throw new HttpError(404, 'User not found.');
+
+    // Prevent demoting the last remaining admin
+    if (existing[0].role === ROLES.ADMIN && newRole !== ROLES.ADMIN) {
+        const [{ adminCount }] = await query("SELECT COUNT(*) AS adminCount FROM users WHERE role = 'admin'");
+        if (adminCount <= 1) {
+            throw new HttpError(400, 'Cannot demote the only remaining Administrator.');
+        }
+    }
+
+    await query('UPDATE users SET role = ? WHERE id = ?', [newRole, targetId]);
+    const [updated] = await query('SELECT * FROM users WHERE id = ?', [targetId]);
+    res.json({
+        message: `Role for ${updated.email} updated to ${newRole}`,
+        user: toUser(updated)
+    });
+});
+
+// Recent system audit log
+app.get('/api/admin/audit', requireAuth, requireRole(ROLES.ADMIN), async (req, res) => {
+    const rows = await query(
+        `SELECT h.id, h.complaint_id, c.description, h.old_status, h.new_status, h.source, h.changed_at,
+                CONCAT(u.first_name, ' ', u.last_name) AS actor_name, u.email AS actor_email, u.role AS actor_role
+         FROM complaint_status_history h
+         JOIN complaints c ON c.id = h.complaint_id
+         LEFT JOIN users u ON u.id = h.changed_by
+         ORDER BY h.changed_at DESC, h.id DESC
+         LIMIT 50`
+    );
+    res.json(rows);
+});
+
+// =======================================================
+// STATIC FRONTEND & ERROR HANDLING
 // =======================================================
 
 app.use((req, res, next) => {
@@ -318,7 +502,7 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => res.redirect('/login.html'));
 app.use(express.static(__dirname, { dotfiles: 'ignore', index: false }));
 
-app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
+app.use('/api', (req, res) => res.status(404).json({ error: 'Endpoint not found.' }));
 
 // Central error handler (Express 5 forwards rejected async handlers here)
 app.use((err, req, res, next) => {
@@ -331,7 +515,7 @@ app.use((err, req, res, next) => {
 });
 
 // =======================================================
-// START — make sure DB + tables exist, then listen
+// START SERVER
 // =======================================================
 
 initDatabase({ log: msg => console.log('[db] ' + msg) })
