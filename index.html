@@ -1,7 +1,8 @@
 <!--
-    Practical - 6: CivicGrid — Area-Wise Task Manager + Kanban Board + Tailwind CSS
-    Description: Demonstrates Tailwind CSS utility-first styling applied across the full HTML web application,
-                 integrating Geolocation, Local Storage, and Drag and Drop APIs.
+    Practical - 8: CivicGrid — Area-Wise Task Manager + Kanban Board
+    Description: Tailwind + Vue frontend backed by Node.js and MySQL (see server.js).
+                 Login, complaints (with photos) and Kanban status changes are stored in the database.
+                 Open through the server: npm start -> http://localhost:3000
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -60,7 +61,7 @@
 </head>
 <body class="bg-amber-50/40 min-h-screen text-slate-800 antialiased p-4 sm:p-8 flex justify-center">
 
-    <div class="w-full max-w-5xl bg-white rounded-3xl border border-slate-200 p-6 sm:p-10 shadow-xl space-y-8">
+    <div id="app" class="w-full max-w-5xl bg-white rounded-3xl border border-slate-200 p-6 sm:p-10 shadow-xl space-y-8">
         
         <!-- Top Navigation Bar -->
         <header class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
@@ -71,7 +72,7 @@
                 <div>
                     <h2 class="text-xl font-bold text-slate-900 tracking-tight">CivicGrid</h2>
                     <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">
-                        Practical 6 • Tailwind CSS
+                        Practical 8 • Node.js + MySQL
                     </span>
                 </div>
             </div>
@@ -85,8 +86,8 @@
 
         <!-- Responsive Banner -->
         <picture class="block rounded-2xl overflow-hidden shadow-sm border border-slate-200">
-            <source media="(max-width: 600px)" srcset="https://via.placeholder.com/600x250/f97316/FFFFFF?text=CivicGrid+Mobile">
-            <img src="https://via.placeholder.com/1200x350/f97316/FFFFFF?text=CivicGrid+Desktop" alt="CivicGrid Banner" class="w-full h-auto object-cover max-h-56">
+            <source media="(max-width: 600px)" srcset="https://placehold.co/600x250/f97316/FFFFFF?text=CivicGrid+Mobile">
+            <img src="https://placehold.co/1200x350/f97316/FFFFFF?text=CivicGrid+Desktop" alt="CivicGrid Banner" class="w-full h-auto object-cover max-h-56">
         </picture>
 
         <!-- Title Header -->
@@ -105,7 +106,7 @@
 
         <!-- I. Geolocation API — Location Bar -->
         <div class="flex justify-center">
-            <button class="btn-location inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-orange-50 border border-orange-300 text-xs sm:text-sm font-semibold text-brand-700 hover:bg-orange-100 transition shadow-sm hover:shadow active:scale-95" id="locationBtn" onclick="detectLocation()">
+            <button v-uppercase-click class="btn-location inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-orange-50 border border-orange-300 text-xs sm:text-sm font-semibold text-brand-700 hover:bg-orange-100 transition shadow-sm hover:shadow active:scale-95" id="locationBtn" onclick="detectLocation()">
                 <span class="pulse-dot"></span>
                 <span id="locationText">📍 Detect My Location</span>
             </button>
@@ -160,21 +161,16 @@
                         class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 outline-none bg-white">
                     
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <select id="areaInput" required
+                        <select id="areaInput" required v-dynamic-list="state.zones"
                             class="px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-brand-500 outline-none bg-white">
                             <option value="" disabled selected>Select Area</option>
-                            <option value="North Zone">North Zone</option>
-                            <option value="South Zone">South Zone</option>
-                            <option value="East Zone">East Zone</option>
-                            <option value="West Zone">West Zone</option>
-                            <option value="Downtown">Downtown</option>
                         </select>
                         
                         <input type="file" id="imageInput" accept="image/*"
                             class="px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-500 bg-white file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-brand-700 hover:file:bg-orange-200">
                         
-                        <button onclick="addTask()"
-                            class="py-2.5 px-5 rounded-xl bg-brand-500 text-white font-bold text-sm shadow-md shadow-brand-500/20 hover:bg-brand-600 transition active:scale-95">
+                        <button id="submitBtn" onclick="addTask()"
+                            class="py-2.5 px-5 rounded-xl bg-brand-500 text-white font-bold text-sm shadow-md shadow-brand-500/20 hover:bg-brand-600 transition active:scale-95 disabled:opacity-50 disabled:cursor-wait">
                             Submit Complaint
                         </button>
                     </div>
@@ -190,9 +186,49 @@
         </div>
 
         <!-- III. Drag and Drop API — KANBAN VIEW Container -->
-        <div id="kanbanView" style="display: none;">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 min-h-[350px]" id="kanbanBoard">
-                <!-- 3 columns injected by app.js -->
+        <div id="kanbanView" v-show="state.currentView === 'kanban'" style="display: none;">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 min-h-[350px]">
+                <div v-for="col in state.kanbanColumns" :key="col.id" :data-status="col.id"
+                     class="kanban-column bg-slate-50/80 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col min-h-[320px] transition-all duration-200"
+                     @dragover="handleDragOver"
+                     @dragleave="handleDragLeave"
+                     @drop="handleDrop($event, col.id)">
+                    
+                    <div :class="['flex items-center justify-between pb-3 mb-3 border-b-2', col.id === 'inprogress' ? 'text-brand-600 border-orange-200' : (col.id === 'resolved' ? 'text-emerald-600 border-emerald-200' : 'text-blue-600 border-blue-200')]">
+                        <h3 class="text-xs font-bold uppercase tracking-wider">{{ col.label }}</h3>
+                        <span :class="['px-2.5 py-0.5 rounded-full text-xs font-extrabold', col.id === 'inprogress' ? 'bg-orange-100 text-brand-700' : (col.id === 'resolved' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700')]">
+                            {{ state.tasks.filter(t => t.status === col.id).length }}
+                        </span>
+                    </div>
+
+                    <div class="card-list flex-1 space-y-3">
+                        <div v-if="state.tasks.filter(t => t.status === col.id).length === 0" class="h-24 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400 italic">
+                            Drop tasks here
+                        </div>
+                        
+                        <div v-for="task in state.tasks.filter(t => t.status === col.id)" :key="task.id"
+                             :class="['kanban-card bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition space-y-2 relative', col.id === 'resolved' ? 'opacity-70 hover:opacity-100' : '']"
+                             draggable="true"
+                             :data-task-id="task.id"
+                             @dragstart="handleDragStart($event, task.id)"
+                             @dragend="handleDragEnd">
+                             
+                            <div :class="['text-xs font-semibold text-slate-900 leading-snug pr-4', col.id === 'resolved' ? 'line-through text-slate-400' : '']">{{ task.text }}</div>
+                            
+                            <div class="flex flex-wrap gap-1.5">
+                                <span class="px-2 py-0.5 bg-orange-100 text-brand-700 rounded-md text-[10px] font-bold">{{ task.area }}</span>
+                                <span v-if="task.location" class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md text-[10px] font-bold">📍 {{ task.location }}</span>
+                            </div>
+
+                            <img v-if="task.image" :src="task.image" class="w-full max-h-28 object-cover rounded-lg border border-slate-200" alt="Task photo">
+
+                            <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
+                                <span class="text-slate-400 font-medium" v-format-date="task.createdAt"></span>
+                                <button class="text-slate-400 hover:text-rose-600 hover:bg-rose-50 px-2 py-0.5 rounded transition font-medium" @click.stop="removeTask(task.id)">🗑️ Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -202,53 +238,159 @@
 
     <!-- Leaflet.js Library -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    
+
+    <!-- Vue.js Library -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <!-- Map, list view and API calls to the Node.js + MySQL backend -->
+    <script src="app.js"></script>
+
     <!-- User Session Logic -->
     <script>
-        const currentUser = JSON.parse(localStorage.getItem('civicgrid_currentUser'));
-        if (!currentUser) {
-            window.location.href = 'login.html';
-        } else {
-            document.getElementById('welcomeMessage').innerText = 'Welcome, ' + currentUser.firstName + ' (' + currentUser.emailId + ')!';
-            setTimeout(() => {
-                const nameInput = document.getElementById('reporterName');
-                const aadharInput = document.getElementById('reporterAadhar');
-                if(nameInput) nameInput.value = currentUser.firstName + ' ' + (currentUser.lastName || '');
-                if(aadharInput) aadharInput.value = currentUser.aadharNumber || '';
-            }, 500);
+        if (location.protocol === 'file:') {
+            alert('Start the server with "npm start" and open http://localhost:3000 — the app needs the Node.js + MySQL backend.');
         }
 
-        function signOut() {
-            localStorage.removeItem('civicgrid_currentUser');
-            window.location.href = 'login.html';
+        async function signOut() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+            } finally {
+                window.location.href = 'login.html';
+            }
         }
 
         // View Switcher Styling Updater
-        const originalSwitchView = window.switchView;
         function switchView(view) {
             currentView = view;
+            if (window.vueComponent) {
+                window.vueComponent.state.currentView = view;
+            }
+
+            // Note: Kanban view display is handled by Vue v-show
             document.getElementById('listView').style.display = view === 'list' ? '' : 'none';
-            document.getElementById('kanbanView').style.display = view === 'kanban' ? '' : 'none';
-            
+
             const btnList = document.getElementById('btnListView');
             const btnKanban = document.getElementById('btnKanbanView');
-            
-            if (view === 'list') {
-                btnList.className = 'px-5 py-2 rounded-lg transition-all duration-200 bg-brand-500 text-white font-semibold shadow-sm';
-                btnKanban.className = 'px-5 py-2 rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-900 font-semibold';
-            } else {
-                btnKanban.className = 'px-5 py-2 rounded-lg transition-all duration-200 bg-brand-500 text-white font-semibold shadow-sm';
-                btnList.className = 'px-5 py-2 rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-900 font-semibold';
-            }
+            const activeCls = 'px-5 py-2 rounded-lg transition-all duration-200 bg-brand-500 text-white font-semibold shadow-sm';
+            const idleCls = 'px-5 py-2 rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-900 font-semibold';
+            btnList.className = view === 'list' ? activeCls : idleCls;
+            btnKanban.className = view === 'kanban' ? activeCls : idleCls;
             render();
         }
     </script>
 
-    <!-- Script loads/saves tasks from localStorage -->
-    <script src="app.js"></script>
     <script>
-        // Initial button active state
-        switchView('list');
+        const { createApp } = Vue;
+        const vueApp = createApp({
+            data() {
+                return {
+                    state: {
+                        tasks: [],
+                        currentView: 'list',
+                        zones: ['North Zone', 'South Zone', 'East Zone', 'West Zone', 'Downtown'],
+                        kanbanColumns: [
+                            { id: 'reported',   label: '📋 Reported' },
+                            { id: 'inprogress', label: '🔧 In Progress' },
+                            { id: 'resolved',   label: '✅ Resolved' }
+                        ]
+                    }
+                }
+            },
+            methods: {
+                handleDragStart(e, id) {
+                    window.draggedTaskId = id.toString();
+                    e.dataTransfer.setData('text/plain', id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    setTimeout(() => e.target.classList.add('opacity-40', 'rotate-2', 'scale-95'), 0);
+                },
+                handleDragEnd(e) {
+                    e.target.classList.remove('opacity-40', 'rotate-2', 'scale-95');
+                    window.draggedTaskId = null;
+                },
+                handleDragOver(e) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    e.currentTarget.classList.add('bg-orange-50', 'border-brand-500');
+                },
+                handleDragLeave(e) {
+                    if (!e.currentTarget.contains(e.relatedTarget)) {
+                        e.currentTarget.classList.remove('bg-orange-50', 'border-brand-500');
+                    }
+                },
+                async handleDrop(e, status) {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('bg-orange-50', 'border-brand-500');
+                    const taskId = parseInt(e.dataTransfer.getData('text/plain'));
+                    const task = window.tasks.find(t => t.id === taskId);
+                    if (task && task.status !== status) {
+                        // Saves the new status + a history row in MySQL
+                        if (await window.updateTaskStatus(taskId, status, 'kanban')) {
+                            window.showToast(`✨ Moved to ${status}`);
+                        }
+                    }
+                },
+                removeTask(id) {
+                    window.removeTask(id);
+                }
+            }
+        });
+
+        // I. Directive to transform text to uppercase when clicked
+        vueApp.directive('uppercase-click', {
+            mounted(el) {
+                el.addEventListener('click', () => {
+                    // Non-destructive uppercase styling to preserve nested elements like the pulse-dot span
+                    el.style.textTransform = 'uppercase';
+                });
+            }
+        });
+
+        // II. Directive to create a dynamic list for select options
+        vueApp.directive('dynamic-list', {
+            mounted(el, binding) {
+                binding.value.forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = item;
+                    opt.innerText = item;
+                    el.appendChild(opt);
+                });
+            }
+        });
+
+        // III. Directive to format dates in human-readable format
+        vueApp.directive('format-date', {
+            mounted(el, binding) {
+                const date = new Date(binding.value);
+                el.innerText = date.toLocaleDateString('en-US', {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+            },
+            updated(el, binding) {
+                const date = new Date(binding.value);
+                el.innerText = date.toLocaleDateString('en-US', {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+            }
+        });
+
+        // Mount Vue first (it re-renders #app), then draw the map/list and load the session
+        window.vueComponent = vueApp.mount('#app');
+
+        (async () => {
+            const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+            if (!res.ok) {
+                window.location.href = 'login.html';
+                return;
+            }
+            const { user } = await res.json();
+            document.getElementById('welcomeMessage').innerText = 'Welcome, ' + user.firstName + ' (' + user.emailId + ')!';
+            document.getElementById('reporterName').value = user.firstName + ' ' + (user.lastName || '');
+            document.getElementById('reporterAadhar').value = user.aadharNumber || '';
+            document.getElementById('reporterResidence').value = user.address || '';
+
+            await initApp();
+            switchView('list');
+        })();
     </script>
 </body>
 </html>

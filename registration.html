@@ -65,7 +65,7 @@
                     </div>
                     <div>
                         <label for="password" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Password</label>
-                        <input type="password" id="password" placeholder="Create a password" required
+                        <input type="password" id="password" placeholder="Create a password (min 6 characters)" minlength="6" required
                             class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition shadow-sm">
                     </div>
                 </div>
@@ -96,9 +96,10 @@
     </div>
 
     <script>
-        document.getElementById('registrationForm').addEventListener('submit', function(e) {
+        // New users are stored in the MySQL `users` table (password is hashed on the server)
+        document.getElementById('registrationForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+
             const user = {
                 firstName: document.getElementById('firstName').value,
                 lastName: document.getElementById('lastName').value,
@@ -109,18 +110,23 @@
                 address: document.getElementById('address').value
             };
             
-            let users = JSON.parse(localStorage.getItem('civicgrid_users')) || [];
-            
-            if (users.find(u => u.emailId === user.emailId)) {
-                alert('User with this Email ID already exists!');
-                return;
-            }
-            
-            users.push(user);
-            localStorage.setItem('civicgrid_users', JSON.stringify(users));
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(user)
+                });
+                const data = await res.json();
 
-            alert('Registration Successful! Please sign in with your new credentials.');
-            window.location.href = 'login.html';
+                if (!res.ok) {
+                    alert(data.error || 'Registration failed. Please try again.');
+                    return;
+                }
+                alert('Registration Successful! Please sign in with your new credentials.');
+                window.location.href = 'login.html';
+            } catch (err) {
+                alert('Cannot reach the CivicGrid server. Start it with "npm start" and open http://localhost:3000');
+            }
         });
     </script>
 </body>

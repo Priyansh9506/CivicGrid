@@ -58,22 +58,30 @@
     </div>
 
     <script>
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
+        // Credentials are checked against the MySQL `users` table; the server sets a session cookie
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+
             const email = document.getElementById('emailId').value;
             const password = document.getElementById('password').value;
-            
-            let users = JSON.parse(localStorage.getItem('civicgrid_users')) || [];
-            
-            const user = users.find(u => u.emailId === email && u.password === password);
-            
-            if (user) {
-                localStorage.setItem('civicgrid_currentUser', JSON.stringify(user));
-                alert('Sign In Successful! Welcome back ' + user.firstName + '!');
-                window.location.href = 'index.html';
-            } else {
-                alert('Invalid Email ID or Password. Please try again.');
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ emailId: email, password: password })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    alert('Sign In Successful! Welcome back ' + data.user.firstName + '!');
+                    window.location.href = 'index.html';
+                } else {
+                    alert(data.error || 'Invalid Email ID or Password. Please try again.');
+                }
+            } catch (err) {
+                alert('Cannot reach the CivicGrid server. Start it with "npm start" and open http://localhost:3000');
             }
         });
     </script>

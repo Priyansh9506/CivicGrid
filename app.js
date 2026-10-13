@@ -1,26 +1,9 @@
 /*
- * Practical - 4: CivicGrid — Area-Wise Task Manager + Kanban Board
- * Description: Extends Practical-3 with three HTML5 APIs:
- *              I.   Geolocation API — detect user's current location
- *              II.  Local Storage API — persist tasks across sessions
- *              III. Drag and Drop API — Kanban board with draggable cards
+ * Practical - 8: CivicGrid — Area-Wise Task Manager + Kanban Board
+ * Description: Same UI as Practical 4-7 (Geolocation, Drag and Drop, Leaflet map, Vue Kanban),
+ *              but complaints are now stored in MySQL through the Node.js API in server.js
+ *              instead of Local Storage.
  */
-
-// ── Constants ──
-const STORAGE_KEY = 'civicgrid_tasks';
-const KANBAN_COLUMNS = [
-    { id: 'reported',   label: '📋 Reported',    colorClass: 'col-reported' },
-    { id: 'inprogress', label: '🔧 In Progress', colorClass: 'col-inprogress' },
-    { id: 'resolved',   label: '✅ Resolved',    colorClass: 'col-resolved' }
-];
-
-// Default sample tasks (same as Practical-3 with added status & location)
-const DEFAULT_TASKS = [
-    { id: 1, text: "Repair main water pipe leak", area: "Downtown", completed: false, status: "reported", location: "Downtown", coords: { lat: 23.0257, lng: 72.5786 }, image: null, createdAt: Date.now() - 86400000 },
-    { id: 2, text: "Fix streetlights on 5th Avenue", area: "North Zone", completed: false, status: "inprogress", location: "North Zone", coords: { lat: 23.0784, lng: 72.5998 }, image: null, createdAt: Date.now() - 43200000 },
-    { id: 3, text: "Clear garbage dump near park", area: "South Zone", completed: true, status: "resolved", location: "South Zone", coords: { lat: 22.9904, lng: 72.5936 }, image: null, createdAt: Date.now() - 172800000 },
-    { id: 4, text: "Fill potholes on Highway 9", area: "East Zone", completed: false, status: "reported", location: "East Zone", coords: { lat: 23.0334, lng: 72.6324 }, image: null, createdAt: Date.now() - 3600000 }
-];
 
 // ── State ──
 let tasks = [];
@@ -33,50 +16,45 @@ let map = null;
 let selectedMarker = null;
 let taskMarkers = [];
 
-const ZONE_COORDS = {
-    "North Zone": { lat: 23.0784, lng: 72.5998 },
-    "South Zone": { lat: 22.9904, lng: 72.5936 },
-    "East Zone": { lat: 23.0334, lng: 72.6324 },
-    "West Zone": { lat: 23.0366, lng: 72.5456 },
-    "Downtown": { lat: 23.0257, lng: 72.5786 }
-};
-
 // =======================================================
-// II. LOCAL STORAGE API — Load and Save Tasks
+// API — talk to the Node.js + MySQL backend
 // =======================================================
 
-function loadTasks() {
-    // II. Retrieve tasks from Local Storage
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-        try {
-            tasks = JSON.parse(saved);
-            // Migrate old tasks that lack status/createdAt/coords
-            tasks = tasks.map(t => ({
-                ...t,
-                status: t.status || (t.completed ? 'resolved' : 'reported'),
-                createdAt: t.createdAt || Date.now(),
-                location: t.location || null,
-                coords: t.coords || (ZONE_COORDS[t.area] || null)
-            }));
-        } catch (e) {
-            console.warn('Failed to parse saved tasks, using defaults.');
-            tasks = [...DEFAULT_TASKS];
-        }
-    } else {
-        tasks = [...DEFAULT_TASKS];
+async function api(url, options = {}) {
+    const res = await fetch(url, { credentials: 'same-origin', ...options });
+    if (res.status === 401) {
+        window.location.href = 'login.html';
+        throw new Error('Please sign in.');
     }
-    saveTasks();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    return data;
 }
 
-function saveTasks() {
-    // II. Persist tasks to Local Storage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+async function loadTasks() {
+    try {
+        tasks = await api('/api/complaints');
+    } catch (err) {
+        showToast(`⚠️ ${err.message}`);
+    }
 }
 
-// =======================================================
-// I. GEOLOCATION API — Detect User's Location
-// =======================================================
+// Used by List view (Complete/Undo) and the Kanban drag & drop
+async function updateTaskStatus(id, status, source) {
+    try {
+        const updated = await api(`/api/complaints/${id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status, source })
+        });
+        tasks = tasks.map(t => (t.id === id ? updated : t));
+        render();
+        return true;
+    } catch (err) {
+        showToast(`⚠️ ${err.message}`);
+        return false;
+    }
+}
 
 // =======================================================
 // MAP INTEGRATION — Initialize Map, Handle Clicks & Markers
@@ -230,23 +208,24 @@ function renderMapMarkers() {
                 statusLabel = 'Reported';
             }
 
+            const r = task.reporterDetails;
             const popupContent = `
                 <div style="min-width: 180px; max-width: 240px; font-family: 'Inter', sans-serif;">
-                    <h4 class="popup-title" style="margin: 0 0 6px 0; font-size: 0.95rem; color: var(--text-main); font-weight:600;">${task.text}</h4>
+                    <h4 class="popup-title" style="margin: 0 0 6px 0; font-size: 0.95rem; color: var(--text-main); font-weight:600;">${escapeHtml(task.text)}</h4>
                     <p style="margin: 2px 0; font-size: 0.8rem; color: var(--text-muted)">
-                        <strong>Area:</strong> ${task.area}
+                        <strong>Area:</strong> ${escapeHtml(task.area)}
                     </p>
-                    ${task.reporterDetails ? `
+                    ${r ? `
                     <p style="margin: 4px 0; font-size: 0.75rem; color: var(--text-muted); background: #f8fafc; padding: 6px; border-radius: 6px; border: 1px solid #e2e8f0;">
-                        <strong>Reporter:</strong> ${task.reporterDetails.name} (${task.reporterDetails.gender}, ${task.reporterDetails.age})<br>
-                        <strong>Aadhar:</strong> ${task.reporterDetails.aadhar}<br>
-                        <strong>Residence:</strong> ${task.reporterDetails.residence}
+                        <strong>Reporter:</strong> ${escapeHtml(r.name)} (${escapeHtml(r.gender)}, ${escapeHtml(r.age)})<br>
+                        <strong>Aadhar:</strong> ${escapeHtml(r.aadhar)}<br>
+                        <strong>Residence:</strong> ${escapeHtml(r.residence)}
                     </p>` : ''}
                     <div class="popup-meta" style="display: flex; gap: 6px; margin-top: 6px;">
                         <span class="tag" style="background: ${statusBadgeColor}; color: var(--text-main); font-size: 0.7rem; padding: 2px 6px;">
                             ${statusLabel}
                         </span>
-                        ${task.location ? `<span class="tag tag-location" style="font-size: 0.7rem; padding: 2px 6px;">🌐 ${task.location}</span>` : ''}
+                        ${task.location ? `<span class="tag tag-location" style="font-size: 0.7rem; padding: 2px 6px;">🌐 ${escapeHtml(task.location)}</span>` : ''}
                     </div>
                     ${imageTag}
                 </div>
@@ -323,23 +302,10 @@ function detectLocation() {
 }
 
 // =======================================================
-// VIEW TOGGLE — Switch between List and Kanban
+// TASK MANAGEMENT — Add, Toggle, Remove (saved in MySQL)
 // =======================================================
 
-function switchView(view) {
-    currentView = view;
-    document.getElementById('listView').style.display = view === 'list' ? '' : 'none';
-    document.getElementById('kanbanView').style.display = view === 'kanban' ? '' : 'none';
-    document.getElementById('btnListView').classList.toggle('active', view === 'list');
-    document.getElementById('btnKanbanView').classList.toggle('active', view === 'kanban');
-    render();
-}
-
-// =======================================================
-// TASK MANAGEMENT — Add, Toggle, Remove
-// =======================================================
-
-function addTask() {
+async function addTask() {
     const input = document.getElementById('taskInput');
     const areaInput = document.getElementById('areaInput');
     const imageInput = document.getElementById('imageInput');
@@ -363,44 +329,52 @@ function addTask() {
         return;
     }
 
-    const reporterDetails = { name, aadhar, age, gender, residence };
+    if (!/^\d{12}$/.test(aadhar)) {
+        showToast('⚠️ Aadhar number must be 12 digits.');
+        return;
+    }
 
     const file = imageInput.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function (e) {
-            createTaskObject(text, area, reporterDetails, e.target.result);
-            imageInput.value = '';
-        };
-        reader.readAsDataURL(file);
-    } else {
-        createTaskObject(text, area, reporterDetails, null);
+    if (file && file.size > 5 * 1024 * 1024) {
+        showToast('⚠️ Image must be 5 MB or smaller.');
+        return;
     }
-}
 
-function createTaskObject(text, area, reporterDetails, imageDataUrl) {
-    const newTask = {
-        id: Date.now(),
-        text: text,
-        area: area,
-        reporterDetails: reporterDetails,
-        image: imageDataUrl,
-        completed: false,
-        status: 'reported',
-        location: userLocation || area,  // Attach detected location or default area name
-        coords: userCoords ? { ...userCoords } : (ZONE_COORDS[area] || null),
-        createdAt: Date.now()
-    };
-    tasks.push(newTask);
-    saveTasks();   // II. Persist to Local Storage
+    // multipart/form-data so the image goes to the server as a file and is stored in MySQL
+    const form = new FormData();
+    form.append('text', text);
+    form.append('area', area);
+    form.append('reporterName', name);
+    form.append('reporterAadhar', aadhar);
+    form.append('reporterAge', age);
+    form.append('reporterGender', gender);
+    form.append('reporterResidence', residence);
+    form.append('location', userLocation || area);  // Attach detected location or default area name
+    if (userCoords) {
+        form.append('lat', userCoords.lat);
+        form.append('lng', userCoords.lng);
+    }
+    if (file) form.append('image', file);
 
-    document.getElementById('taskInput').value = '';
-    document.getElementById('areaInput').value = '';
-    document.getElementById('reporterName').value = '';
-    document.getElementById('reporterAadhar').value = '';
-    document.getElementById('reporterAge').value = '';
-    document.getElementById('reporterGender').value = '';
-    document.getElementById('reporterResidence').value = '';
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    try {
+        const newTask = await api('/api/complaints', { method: 'POST', body: form });
+        tasks.push(newTask);
+    } catch (err) {
+        showToast(`⚠️ ${err.message}`);
+        return;
+    } finally {
+        submitBtn.disabled = false;
+    }
+
+    // Keep the signed-in user's name/Aadhar filled in for the next complaint
+    input.value = '';
+    areaInput.value = '';
+    imageInput.value = '';
+    reporterAge.value = '';
+    reporterGender.value = '';
+    reporterResidence.value = '';
 
     // Reset location selection
     userCoords = null;
@@ -412,28 +386,24 @@ function createTaskObject(text, area, reporterDetails, imageDataUrl) {
     document.getElementById('locationText').textContent = '📍 Detect My Location';
 
     render();
-    showToast('✅ Task added!');
+    showToast('✅ Complaint saved!');
 }
 
 function toggleTask(id) {
-    tasks = tasks.map(task => {
-        if (task.id === id) {
-            const newCompleted = !task.completed;
-            return {
-                ...task,
-                completed: newCompleted,
-                status: newCompleted ? 'resolved' : 'reported'
-            };
-        }
-        return task;
-    });
-    saveTasks();   // II. Persist change
-    render();
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    updateTaskStatus(id, task.completed ? 'reported' : 'resolved', 'list');
 }
 
-function removeTask(id) {
+async function removeTask(id) {
+    if (!confirm('Remove this complaint permanently?')) return;
+    try {
+        await api(`/api/complaints/${id}`, { method: 'DELETE' });
+    } catch (err) {
+        showToast(`⚠️ ${err.message}`);
+        return;
+    }
     tasks = tasks.filter(task => task.id !== id);
-    saveTasks();   // II. Persist deletion
     render();
     showToast('🗑️ Task removed');
 }
@@ -503,7 +473,7 @@ function renderListView() {
             if (task.reporterDetails) {
                 const reporterInfo = document.createElement('div');
                 reporterInfo.className = 'text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-200';
-                reporterInfo.innerHTML = `<strong>Reported by:</strong> ${task.reporterDetails.name} (Aadhar: ${task.reporterDetails.aadhar})`;
+                reporterInfo.innerHTML = `<strong>Reported by:</strong> ${escapeHtml(task.reporterDetails.name)} (Aadhar: ${escapeHtml(task.reporterDetails.aadhar)})`;
                 taskContent.appendChild(reporterInfo);
             }
 
@@ -544,166 +514,26 @@ function renderListView() {
 // III. DRAG AND DROP API — Kanban Board Rendering
 // =======================================================
 
-let draggedTaskId = null;
-
-function handleDragStart(e) {
-    draggedTaskId = e.target.dataset.taskId;
-    e.dataTransfer.setData('text/plain', draggedTaskId);
-    e.dataTransfer.effectAllowed = 'move';
-    setTimeout(() => e.target.classList.add('opacity-40', 'rotate-2', 'scale-95'), 0);
-}
-
-function handleDragEnd(e) {
-    e.target.classList.remove('opacity-40', 'rotate-2', 'scale-95');
-    draggedTaskId = null;
-    document.querySelectorAll('.kanban-column').forEach(col => col.classList.remove('bg-orange-50', 'border-brand-500'));
-}
-
-function handleDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    e.currentTarget.classList.add('bg-orange-50', 'border-brand-500');
-}
-
-function handleDragLeave(e) {
-    if (!e.currentTarget.contains(e.relatedTarget)) {
-        e.currentTarget.classList.remove('bg-orange-50', 'border-brand-500');
-    }
-}
-
-function handleDrop(e) {
-    e.preventDefault();
-    e.currentTarget.classList.remove('bg-orange-50', 'border-brand-500');
-
-    const taskId = parseInt(e.dataTransfer.getData('text/plain'));
-    const newStatus = e.currentTarget.dataset.status;
-
-    const task = tasks.find(t => t.id === taskId);
-    if (task && task.status !== newStatus) {
-        task.status = newStatus;
-        task.completed = (newStatus === 'resolved');
-        saveTasks();        // II. Persist change
-        render();
-        const colLabel = KANBAN_COLUMNS.find(c => c.id === newStatus).label;
-        showToast(`✨ Moved to ${colLabel}`);
-    }
-}
-
-function renderKanbanView() {
-    const board = document.getElementById('kanbanBoard');
-    board.innerHTML = '';
-
-    KANBAN_COLUMNS.forEach(col => {
-        const colEl = document.createElement('div');
-        colEl.className = `kanban-column bg-slate-50/80 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col min-h-[320px] transition-all duration-200`;
-        colEl.dataset.status = col.id;
-
-        colEl.addEventListener('dragover', handleDragOver);
-        colEl.addEventListener('dragleave', handleDragLeave);
-        colEl.addEventListener('drop', handleDrop);
-
-        const colTasks = tasks.filter(t => t.status === col.id);
-
-        let headerColorClass = 'text-blue-600 border-blue-200';
-        let countBgClass = 'bg-blue-100 text-blue-700';
-        if (col.id === 'inprogress') {
-            headerColorClass = 'text-brand-600 border-orange-200';
-            countBgClass = 'bg-orange-100 text-brand-700';
-        } else if (col.id === 'resolved') {
-            headerColorClass = 'text-emerald-600 border-emerald-200';
-            countBgClass = 'bg-emerald-100 text-emerald-700';
-        }
-
-        const header = document.createElement('div');
-        header.className = `flex items-center justify-between pb-3 mb-3 border-b-2 ${headerColorClass}`;
-        header.innerHTML = `
-            <h3 class="text-xs font-bold uppercase tracking-wider">${col.label}</h3>
-            <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold ${countBgClass}">${colTasks.length}</span>
-        `;
-        colEl.appendChild(header);
-
-        const cardList = document.createElement('div');
-        cardList.className = 'card-list flex-1 space-y-3';
-
-        if (colTasks.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'h-24 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400 italic';
-            empty.textContent = 'Drop tasks here';
-            cardList.appendChild(empty);
-        } else {
-            colTasks.forEach(task => {
-                const card = document.createElement('div');
-                card.className = `kanban-card bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition space-y-2 relative ${col.id === 'resolved' ? 'opacity-70 hover:opacity-100' : ''}`;
-                card.draggable = true;
-                card.dataset.taskId = task.id;
-                card.addEventListener('dragstart', handleDragStart);
-                card.addEventListener('dragend', handleDragEnd);
-
-                const title = document.createElement('div');
-                title.className = `text-xs font-semibold text-slate-900 leading-snug pr-4 ${col.id === 'resolved' ? 'line-through text-slate-400' : ''}`;
-                title.textContent = task.text;
-                card.appendChild(title);
-
-                const tags = document.createElement('div');
-                tags.className = 'flex flex-wrap gap-1.5';
-
-                const areaTag = document.createElement('span');
-                areaTag.className = 'px-2 py-0.5 bg-orange-100 text-brand-700 rounded-md text-[10px] font-bold';
-                areaTag.textContent = task.area;
-                tags.appendChild(areaTag);
-
-                if (task.location) {
-                    const locTag = document.createElement('span');
-                    locTag.className = 'px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md text-[10px] font-bold';
-                    locTag.textContent = `📍 ${task.location}`;
-                    tags.appendChild(locTag);
-                }
-                card.appendChild(tags);
-
-                if (task.image) {
-                    const img = document.createElement('img');
-                    img.src = task.image;
-                    img.className = 'w-full max-h-28 object-cover rounded-lg border border-slate-200';
-                    img.alt = 'Task photo';
-                    card.appendChild(img);
-                }
-
-                const footer = document.createElement('div');
-                footer.className = 'flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]';
-
-                const timeEl = document.createElement('span');
-                timeEl.className = 'text-slate-400 font-medium';
-                timeEl.textContent = timeAgo(task.createdAt);
-                footer.appendChild(timeEl);
-
-                const delBtn = document.createElement('button');
-                delBtn.className = 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 px-2 py-0.5 rounded transition font-medium';
-                delBtn.textContent = '🗑️ Remove';
-                delBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    removeTask(task.id);
-                };
-                footer.appendChild(delBtn);
-
-                card.appendChild(footer);
-                cardList.appendChild(card);
-            });
-        }
-
-        colEl.appendChild(cardList);
-        board.appendChild(colEl);
-    });
-}
+// Kanban rendering and drag-and-drop logic has been migrated to Vue.js
+// See index.html for the Vue template and methods handling this view.
 
 // =======================================================
 // UNIFIED RENDER
 // =======================================================
 
 function render() {
+    window.tasks = tasks; // Export to global scope for Vue
+    if (window.vueComponent) {
+        window.vueComponent.state.tasks = tasks;
+        window.vueComponent.state.currentView = currentView;
+    }
+
     if (currentView === 'list') {
+        document.getElementById('listView').style.display = '';
         renderListView();
     } else {
-        renderKanbanView();
+        document.getElementById('listView').style.display = 'none';
+        // Kanban view rendering is now handled reactivity by Vue in index.html
     }
     renderMapMarkers();
 }
@@ -729,14 +559,23 @@ function timeAgo(timestamp) {
 function showToast(msg) {
     const toast = document.getElementById('toast');
     toast.textContent = msg;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2500);
+    toast.classList.remove('opacity-0', 'translate-y-4');
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(() => toast.classList.add('opacity-0', 'translate-y-4'), 2500);
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[ch]);
 }
 
 // =======================================================
-// INIT — Load from Local Storage and render
+// INIT — called from index.html once Vue has mounted
 // =======================================================
 
-loadTasks();   // II. Load persisted tasks
-initMap();     // Initialize Leaflet map
-render();
+async function initApp() {
+    initMap();          // Initialize Leaflet map
+    await loadTasks();  // Load complaints from MySQL
+    render();
+}

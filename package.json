@@ -1,0 +1,19 @@
+{
+  "name": "civicgrid",
+  "version": "1.0.0",
+  "description": "CivicGrid - area-wise civic complaint manager (Node.js + Express + MySQL)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "setup": "node connection/setup.js",
+    "crud-demo": "node connection/crud-demo.js"
+  },
+  "keywords": [],
+  "author": "Priyansh9506",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1",
+    "multer": "^2.4.0",
+    "mysql2": "^3.24.4"
+  }
+}
