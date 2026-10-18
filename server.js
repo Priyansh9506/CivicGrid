@@ -228,27 +228,6 @@ app.get('/api/auth/roles', (req, res) => {
     });
 });
 
-// 1-Click Demo Role Switcher (Practical 9 viva & evaluation helper)
-app.post('/api/auth/switch-demo-role', async (req, res) => {
-    const targetRole = req.body?.role;
-    if (!ROLE_LIST.includes(targetRole)) throw new HttpError(400, 'Invalid role.');
-
-    const rows = await query('SELECT * FROM users WHERE role = ? ORDER BY id LIMIT 1', [targetRole]);
-    if (!rows.length) throw new HttpError(404, `No demo account found for role ${targetRole}.`);
-
-    const user = rows[0];
-    const token = crypto.randomBytes(32).toString('hex');
-    await query('DELETE FROM sessions WHERE expires_at <= NOW()');
-    await query(
-        'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, NOW() + INTERVAL ? DAY)',
-        [token, user.id, SESSION_DAYS]);
-
-    setSessionCookie(res, token, SESSION_DAYS * 24 * 60 * 60);
-    res.json({
-        message: `Active session switched to ${ROLE_METADATA[targetRole].name}`,
-        user: toUser(user)
-    });
-});
 
 // =======================================================
 // COMPLAINT ROUTES — with RBAC checks
@@ -473,6 +452,27 @@ app.patch('/api/admin/users/:id/role', requireAuth, requireRole(ROLES.ADMIN), as
         message: `Role for ${updated.email} updated to ${newRole}`,
         user: toUser(updated)
     });
+});
+
+// Delete a user and their associated data (Admin only)
+app.delete('/api/admin/users/:id', requireAuth, requireRole(ROLES.ADMIN), async (req, res) => {
+    const targetId = Number(req.params.id);
+    if (!targetId) throw new HttpError(400, 'Invalid user ID.');
+
+    if (req.user.id === targetId) {
+        throw new HttpError(400, 'Access Denied: You cannot delete your own Administrator account.');
+    }
+
+    const rows = await query('SELECT * FROM users WHERE id = ?', [targetId]);
+    if (!rows.length) throw new HttpError(404, 'User not found.');
+    const user = rows[0];
+
+    await query('DELETE FROM sessions WHERE user_id = ?', [targetId]);
+    await query('DELETE FROM complaint_status_history WHERE changed_by = ? OR complaint_id IN (SELECT id FROM complaints WHERE user_id = ?)', [targetId, targetId]);
+    await query('DELETE FROM complaints WHERE user_id = ?', [targetId]);
+    await query('DELETE FROM users WHERE id = ?', [targetId]);
+
+    res.json({ message: `User "${user.first_name} ${user.last_name}" (${user.email}) has been permanently deleted.` });
 });
 
 // Recent system audit log

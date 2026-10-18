@@ -25,28 +25,25 @@
         <!-- Form Body -->
         <div class="p-8 space-y-6">
 
-            <!-- 1-Click Demo Credentials Quick-Select (Viva & Grading shortcut) -->
-            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
+            <!-- Demo Credentials Reference (Manual Entry Required) -->
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">⚡ 1-Click Demo Roles:</span>
-                    <span class="text-[11px] text-slate-400 font-medium">Click to instant sign-in</span>
+                    <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">🔑 Demo User Accounts:</span>
+                    <span class="text-[11px] text-slate-400 font-medium">Enter credentials below</span>
                 </div>
-                <div class="grid grid-cols-3 gap-2">
-                    <button type="button" onclick="quickLogin('citizen@civicgrid.org', 'Citizen@123', 'Citizen')"
-                        class="px-2.5 py-2 rounded-xl bg-white border border-sky-200 text-sky-700 hover:bg-sky-50 transition text-xs font-bold flex flex-col items-center gap-0.5 shadow-sm active:scale-95">
-                        <span class="text-base">👤</span>
-                        <span>Citizen</span>
-                    </button>
-                    <button type="button" onclick="quickLogin('officer@civicgrid.org', 'Officer@123', 'Officer')"
-                        class="px-2.5 py-2 rounded-xl bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 transition text-xs font-bold flex flex-col items-center gap-0.5 shadow-sm active:scale-95">
-                        <span class="text-base">🛡️</span>
-                        <span>Officer</span>
-                    </button>
-                    <button type="button" onclick="quickLogin('admin@civicgrid.org', 'Admin@123', 'Admin')"
-                        class="px-2.5 py-2 rounded-xl bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 transition text-xs font-bold flex flex-col items-center gap-0.5 shadow-sm active:scale-95">
-                        <span class="text-base">👑</span>
-                        <span>Admin</span>
-                    </button>
+                <div class="space-y-1.5 text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200">
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-sky-700">👤 Citizen:</span>
+                        <span class="font-mono text-[11px] text-slate-700">citizen@civicgrid.org / Citizen@123</span>
+                    </div>
+                    <div class="flex items-center justify-between border-t border-slate-100 pt-1.5">
+                        <span class="font-semibold text-amber-700">🛡️ Field Officer:</span>
+                        <span class="font-mono text-[11px] text-slate-700">officer@civicgrid.org / Officer@123</span>
+                    </div>
+                    <div class="flex items-center justify-between border-t border-slate-100 pt-1.5">
+                        <span class="font-semibold text-purple-700">👑 Administrator:</span>
+                        <span class="font-mono text-[11px] text-slate-700">admin@civicgrid.org / Admin@123</span>
+                    </div>
                 </div>
             </div>
 
@@ -110,12 +107,6 @@
                 btn.disabled = false;
                 btn.innerText = 'Sign In with RBAC';
             }
-        }
-
-        function quickLogin(email, password, roleLabel) {
-            document.getElementById('emailId').value = email;
-            document.getElementById('password').value = password;
-            doLogin(email, password, roleLabel);
         }
 
         document.getElementById('loginForm').addEventListener('submit', function(e) {

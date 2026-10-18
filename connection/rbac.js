@@ -27,6 +27,7 @@ const PERMISSIONS = {
     // User management domain (Admin only)
     USER_READ: 'user:read',
     USER_ROLE_UPDATE: 'user:role:update',
+    USER_DELETE: 'user:delete',
 
     // System audit & governance
     RBAC_AUDIT: 'rbac:audit',
@@ -58,6 +59,7 @@ const ROLE_PERMISSIONS = {
         PERMISSIONS.COMPLAINT_INSPECT,
         PERMISSIONS.USER_READ,
         PERMISSIONS.USER_ROLE_UPDATE,
+        PERMISSIONS.USER_DELETE,
         PERMISSIONS.RBAC_AUDIT
     ]
 };
