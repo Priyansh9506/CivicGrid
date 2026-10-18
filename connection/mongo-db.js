@@ -3,6 +3,10 @@
  * Manages connection pooling, ping verification, and collection retrieval using MongoClient.
  */
 
+const dns = require('dns');
+// Force Google Public DNS so Atlas SRV records resolve on any network
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+
 const { MongoClient, ObjectId } = require('mongodb');
 const { MONGO_URI, MONGO_DB_NAME, explainMongoError } = require('./mongo-config');
 
