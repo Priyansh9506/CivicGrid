@@ -32,6 +32,21 @@ const {
     hasPermission
 } = require('./connection/rbac');
 
+// Practical 10: MongoDB CRUD Modules
+const {
+    createOne: mongoCreateOne,
+    createMany: mongoCreateMany,
+    readAll: mongoReadAll,
+    readOne: mongoReadOne,
+    readById: mongoReadById,
+    readDistinct: mongoReadDistinct,
+    updateOneRecord: mongoUpdateOne,
+    updateById: mongoUpdateById,
+    deleteById: mongoDeleteById,
+    aggregateRecords: mongoAggregate
+} = require('./connection/mongo-crud');
+const { connectMongo } = require('./connection/mongo-db');
+
 const PORT = Number(process.env.PORT) || 3000;
 const SESSION_COOKIE = 'civicgrid_session';
 const SESSION_DAYS = 7;
@@ -487,6 +502,100 @@ app.get('/api/admin/audit', requireAuth, requireRole(ROLES.ADMIN), async (req, r
          LIMIT 50`
     );
     res.json(rows);
+});
+
+// =======================================================
+// PRACTICAL - 10: MONGODB CRUD REST API ROUTES
+// =======================================================
+const MONGO_COLLECTION = 'civic_complaints';
+
+// Ensure MongoDB is connected for Mongo API routes
+async function ensureMongo(req, res, next) {
+    try {
+        await connectMongo();
+        next();
+    } catch (err) {
+        res.status(503).json({
+            error: 'MongoDB service unavailable. Ensure MongoDB is running on port 27017.',
+            details: err.message
+        });
+    }
+}
+
+// 1. READ ALL (with optional filters: ?area=...&status=...&priority=...)
+app.get('/api/mongo/complaints', ensureMongo, async (req, res) => {
+    const filter = {};
+    if (req.query.area) filter.area = String(req.query.area);
+    if (req.query.status) filter.status = String(req.query.status);
+    if (req.query.priority) filter.priority = String(req.query.priority);
+
+    const complaints = await mongoReadAll(MONGO_COLLECTION, { filter, sort: { createdAt: -1 } });
+    res.json(complaints);
+});
+
+// 2. READ ONE BY ID
+app.get('/api/mongo/complaints/:id', ensureMongo, async (req, res) => {
+    const doc = await mongoReadById(MONGO_COLLECTION, req.params.id);
+    if (!doc) throw new HttpError(404, 'MongoDB complaint not found.');
+    res.json(doc);
+});
+
+// 3. CREATE (INSERT ONE)
+app.post('/api/mongo/complaints', ensureMongo, async (req, res) => {
+    const b = req.body || {};
+    if (!b.description || !b.area) {
+        throw new HttpError(400, 'Description and Area are required fields.');
+    }
+    const doc = {
+        description: String(b.description).trim(),
+        area: String(b.area).trim(),
+        priority: b.priority || 'Medium',
+        status: b.status || 'reported',
+        reporter: b.reporter || { name: 'Anonymous', mobile: '' },
+        location: b.location || { label: b.area },
+        tags: Array.isArray(b.tags) ? b.tags : []
+    };
+    const result = await mongoCreateOne(MONGO_COLLECTION, doc);
+    res.status(201).json(result);
+});
+
+// 4. CREATE BATCH (INSERT MANY)
+app.post('/api/mongo/complaints/batch', ensureMongo, async (req, res) => {
+    const list = req.body?.complaints;
+    if (!Array.isArray(list) || list.length === 0) {
+        throw new HttpError(400, 'Requires a JSON body with non-empty "complaints" array.');
+    }
+    const result = await mongoCreateMany(MONGO_COLLECTION, list);
+    res.status(201).json(result);
+});
+
+// 5. UPDATE (BY ID)
+app.patch('/api/mongo/complaints/:id', ensureMongo, async (req, res) => {
+    const updates = req.body || {};
+    delete updates._id; // Prevent updating immutable _id
+    const result = await mongoUpdateById(MONGO_COLLECTION, req.params.id, updates);
+    if (result.matchedCount === 0) throw new HttpError(404, 'MongoDB complaint not found.');
+    const updated = await mongoReadById(MONGO_COLLECTION, req.params.id);
+    res.json({ message: 'Document updated successfully.', document: updated });
+});
+
+// 6. DELETE (BY ID)
+app.delete('/api/mongo/complaints/:id', ensureMongo, async (req, res) => {
+    const result = await mongoDeleteById(MONGO_COLLECTION, req.params.id);
+    if (result.deletedCount === 0) throw new HttpError(404, 'MongoDB complaint not found.');
+    res.json({ message: 'Complaint deleted from MongoDB successfully.' });
+});
+
+// 7. AGGREGATE / STATS (Area & Status grouping)
+app.get('/api/mongo/stats', ensureMongo, async (req, res) => {
+    const areaStats = await mongoAggregate(MONGO_COLLECTION, [
+        { $group: { _id: '$area', count: { $sum: 1 } } },
+        { $sort: { count: -1 } }
+    ]);
+    const statusStats = await mongoAggregate(MONGO_COLLECTION, [
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+    ]);
+    res.json({ byArea: areaStats, byStatus: statusStats });
 });
 
 // =======================================================

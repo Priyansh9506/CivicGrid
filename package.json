@@ -7,13 +7,15 @@
     "start": "node server.js",
     "setup": "node connection/setup.js",
     "crud-demo": "node connection/crud-demo.js",
-    "rbac-demo": "node connection/rbac-demo.js"
+    "rbac-demo": "node connection/rbac-demo.js",
+    "mongo-demo": "node connection/mongo-crud-demo.js"
   },
   "keywords": [],
   "author": "Priyansh9506",
   "license": "ISC",
   "dependencies": {
     "express": "^5.2.1",
+    "mongodb": "^7.7.0",
     "multer": "^2.4.0",
     "mysql2": "^3.24.4"
   }

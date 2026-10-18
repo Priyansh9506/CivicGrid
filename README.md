@@ -79,6 +79,27 @@ This script:
 
 ---
 
+## 🍃 Practical 10: Node.js with MongoDB CRUD Operations
+
+Demonstrates Node.js with MongoDB to perform **Create**, **Read**, **Update**, and **Delete** operations:
+
+```bash
+npm run mongo-demo
+# or: node connection/mongo-crud-demo.js
+```
+
+### Operations Demonstrated:
+1. **CREATE**: `insertOne` (single document) and `insertMany` (batch insert across zones).
+2. **READ**: `find().toArray()` (all), `findOne()` (filtered by area), projection (field selection), and `distinct()`.
+3. **UPDATE**: `updateOne()` with `$set` and automatic `updatedAt`, and `updateMany()` for bulk field updates.
+4. **AGGREGATE**: Multi-stage aggregation pipeline (`$group`, `$sum`, `$sort`) for zonal analytics.
+5. **DELETE**: `deleteOne()` by `_id` and `deleteMany()` by status filter.
+6. **REST API**: Full REST endpoints available under `/api/mongo/complaints` and `/api/mongo/stats`.
+
+See [`PRACTICAL_10_MONGODB_CRUD.md`](PRACTICAL_10_MONGODB_CRUD.md) for complete documentation and viva questions.
+
+---
+
 ## 🖥️ User Interface RBAC Features
 
 - **One-Click Demo Sign-In (`login.html`)**: Fast buttons to sign in as Citizen, Officer, or Admin.
