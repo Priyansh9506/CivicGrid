@@ -1,15 +1,16 @@
 /*
- * Practical - 9: CivicGrid — Role-Based Authentication and Access Control (RBAC) Backend
- * Built with Node.js, Express, and MySQL.
+ * Practical - 10: CivicGrid — Full-Stack Node.js Application Powered by MongoDB
  *
  * Implements:
+ *   - MongoDB native database backend (sessions, users, zones, complaints, status history)
  *   - 3 System Roles: Citizen (1), Field Officer (2), Administrator (3)
- *   - Fine-grained Permissions & Middleware: requireAuth, requireRole, requirePermission
- *   - RBAC protected endpoints:
+ *   - Fine-grained RBAC Middlewares: requireAuth, requireRole, requirePermission
+ *   - Protected Endpoints:
  *       * Status updates (Kanban drag & drop / List): Officers & Admins only
  *       * Complaint deletion: Admins (all) or Citizens (own complaints only)
  *       * User Management & Role Switching: Admins only
  *       * Fast 1-click Demo Role Switcher for live viva evaluation
+ *   - Full CRUD REST API for MongoDB under /api/mongo/*
  *
  * Start: npm start  -> http://localhost:3000
  */
@@ -18,10 +19,9 @@ const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
 
-const { initDatabase, closeConnection } = require('./connection/setup');
-const { query, transaction } = require('./connection/db');
-const { selectAll, deleteRecord } = require('./connection/crud');
-const { explainDbError } = require('./connection/config');
+const { initDatabase } = require('./connection/setup');
+const { getDb, connectMongo, ObjectId } = require('./connection/mongo-db');
+const { explainMongoError } = require('./connection/mongo-config');
 const {
     ROLES,
     ROLE_LIST,
@@ -32,20 +32,18 @@ const {
     hasPermission
 } = require('./connection/rbac');
 
-// Practical 10: MongoDB CRUD Modules
+// Practical 10: User-defined MongoDB CRUD Module
 const {
     createOne: mongoCreateOne,
     createMany: mongoCreateMany,
     readAll: mongoReadAll,
     readOne: mongoReadOne,
     readById: mongoReadById,
-    readDistinct: mongoReadDistinct,
     updateOneRecord: mongoUpdateOne,
     updateById: mongoUpdateById,
     deleteById: mongoDeleteById,
     aggregateRecords: mongoAggregate
 } = require('./connection/mongo-crud');
-const { connectMongo } = require('./connection/mongo-db');
 
 const PORT = Number(process.env.PORT) || 3000;
 const SESSION_COOKIE = 'civicgrid_session';
@@ -56,7 +54,7 @@ const GENDERS = ['Male', 'Female', 'Other'];
 const app = express();
 app.use(express.json());
 
-// Uploaded images are kept in memory and written straight into MySQL
+// Uploaded images are kept in memory and saved into MongoDB BSON documents
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 },
@@ -70,6 +68,15 @@ class HttpError extends Error {
     constructor(status, message) { super(message); this.status = status; }
 }
 
+function toObjectId(id) {
+    if (!id) return null;
+    if (id instanceof ObjectId) return id;
+    if (typeof id === 'string' && ObjectId.isValid(id)) {
+        return new ObjectId(id);
+    }
+    return id;
+}
+
 // =======================================================
 // AUTH & RBAC HELPERS — hashing, sessions & access control
 // =======================================================
@@ -81,6 +88,7 @@ function hashPassword(password) {
 }
 
 function verifyPassword(password, stored) {
+    if (!stored || !stored.includes(':')) return false;
     const [salt, hash] = stored.split(':');
     const expected = Buffer.from(hash, 'hex');
     const actual = crypto.scryptSync(password, salt, expected.length);
@@ -101,39 +109,45 @@ function setSessionCookie(res, token, maxAgeSeconds) {
         `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}`);
 }
 
-function toUser(row) {
-    const role = row.role || ROLES.CITIZEN;
+function toUser(doc) {
+    if (!doc) return null;
+    const role = doc.role || ROLES.CITIZEN;
     return {
-        id: row.id,
-        firstName: row.first_name,
-        lastName: row.last_name,
-        mobileNumber: row.mobile_number,
-        aadharNumber: row.aadhar_number,
-        emailId: row.email,
+        id: doc._id.toString(),
+        firstName: doc.first_name,
+        lastName: doc.last_name,
+        mobileNumber: doc.mobile_number,
+        aadharNumber: doc.aadhar_number,
+        emailId: doc.email,
         role: role,
         roleMeta: ROLE_METADATA[role] || ROLE_METADATA[ROLES.CITIZEN],
         permissions: ROLE_PERMISSIONS[role] || [],
-        address: row.address
+        address: doc.address
     };
 }
 
-// Authenticates current session cookie and attaches req.user
+// Authenticates current session cookie and attaches req.user from MongoDB
 async function requireAuth(req, res, next) {
     const token = readCookie(req, SESSION_COOKIE);
     if (token) {
-        const rows = await query(
-            `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
-             WHERE s.token = ? AND s.expires_at > NOW()`, [token]);
-        if (rows.length) {
-            req.user = rows[0];
-            req.sessionToken = token;
-            return next();
+        const db = getDb();
+        const session = await db.collection('sessions').findOne({
+            token,
+            expires_at: { $gt: new Date() }
+        });
+        if (session) {
+            const user = await db.collection('users').findOne({ _id: session.user_id });
+            if (user) {
+                req.user = user;
+                req.sessionToken = token;
+                return next();
+            }
         }
     }
     res.status(401).json({ error: 'Please sign in.' });
 }
 
-// RBAC Middleware: Enforces that the user has at least one of the allowed roles
+// RBAC Middleware: Enforces allowed roles
 function requireRole(...allowedRoles) {
     return (req, res, next) => {
         if (!req.user) return res.status(401).json({ error: 'Please sign in.' });
@@ -149,7 +163,7 @@ function requireRole(...allowedRoles) {
     };
 }
 
-// RBAC Middleware: Enforces that the user's role has a specific fine-grained permission
+// RBAC Middleware: Enforces fine-grained permission
 function requirePermission(permission) {
     return (req, res, next) => {
         if (!req.user) return res.status(401).json({ error: 'Please sign in.' });
@@ -171,36 +185,42 @@ app.post('/api/auth/register', async (req, res) => {
     const b = req.body || {};
     const role = ROLE_LIST.includes(b.role) ? b.role : ROLES.CITIZEN;
     const user = {
-        firstName: String(b.firstName || '').trim(),
-        lastName: String(b.lastName || '').trim(),
-        mobileNumber: String(b.mobileNumber || '').trim(),
-        aadharNumber: String(b.aadharNumber || '').trim(),
-        emailId: String(b.emailId || '').trim().toLowerCase(),
+        first_name: String(b.firstName || '').trim(),
+        last_name: String(b.lastName || '').trim(),
+        mobile_number: String(b.mobileNumber || '').trim(),
+        aadhar_number: String(b.aadharNumber || '').trim(),
+        email: String(b.emailId || '').trim().toLowerCase(),
         password: String(b.password || ''),
         address: String(b.address || '').trim(),
         role
     };
 
-    if (!user.firstName || !user.lastName || !user.address) throw new HttpError(400, 'Please fill in all fields.');
-    if (!/^\d{10}$/.test(user.mobileNumber)) throw new HttpError(400, 'Mobile number must be 10 digits.');
-    if (!/^\d{12}$/.test(user.aadharNumber)) throw new HttpError(400, 'Aadhar number must be 12 digits.');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.emailId)) throw new HttpError(400, 'Please enter a valid email.');
+    if (!user.first_name || !user.last_name || !user.address) throw new HttpError(400, 'Please fill in all fields.');
+    if (!/^\d{10}$/.test(user.mobile_number)) throw new HttpError(400, 'Mobile number must be 10 digits.');
+    if (!/^\d{12}$/.test(user.aadhar_number)) throw new HttpError(400, 'Aadhar number must be 12 digits.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)) throw new HttpError(400, 'Please enter a valid email.');
     if (user.password.length < 6) throw new HttpError(400, 'Password must be at least 6 characters.');
 
-    try {
-        await query(
-            `INSERT INTO users (first_name, last_name, mobile_number, aadhar_number, email, password_hash, role, address)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [user.firstName, user.lastName, user.mobileNumber, user.aadharNumber,
-             user.emailId, hashPassword(user.password), user.role, user.address]);
-    } catch (err) {
-        if (err.code === 'ER_DUP_ENTRY') {
-            throw new HttpError(409, /aadhar/.test(err.message)
-                ? 'A user with this Aadhar number already exists!'
-                : 'User with this Email ID already exists!');
-        }
-        throw err;
-    }
+    const db = getDb();
+    const existingEmail = await db.collection('users').findOne({ email: user.email });
+    if (existingEmail) throw new HttpError(409, 'User with this Email ID already exists!');
+
+    const existingAadhar = await db.collection('users').findOne({ aadhar_number: user.aadhar_number });
+    if (existingAadhar) throw new HttpError(409, 'A user with this Aadhar number already exists!');
+
+    await db.collection('users').insertOne({
+        first_name: user.first_name,
+        last_name: user.last_name,
+        mobile_number: user.mobile_number,
+        aadhar_number: user.aadhar_number,
+        email: user.email,
+        password_hash: hashPassword(user.password),
+        role: user.role,
+        address: user.address,
+        created_at: new Date(),
+        updated_at: new Date()
+    });
+
     res.status(201).json({ message: 'Registration successful.' });
 });
 
@@ -208,19 +228,25 @@ app.post('/api/auth/login', async (req, res) => {
     const email = String(req.body?.emailId || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
 
-    const rows = await query('SELECT * FROM users WHERE email = ?', [email]);
-    if (!rows.length || !verifyPassword(password, rows[0].password_hash)) {
+    const db = getDb();
+    const user = await db.collection('users').findOne({ email });
+    if (!user || !verifyPassword(password, user.password_hash)) {
         throw new HttpError(401, 'Invalid Email ID or Password. Please try again.');
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-    await query('DELETE FROM sessions WHERE expires_at <= NOW()');
-    await query(
-        'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, NOW() + INTERVAL ? DAY)',
-        [token, rows[0].id, SESSION_DAYS]);
+    const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+
+    await db.collection('sessions').deleteMany({ expires_at: { $lte: new Date() } });
+    await db.collection('sessions').insertOne({
+        token,
+        user_id: user._id,
+        created_at: new Date(),
+        expires_at: expiresAt
+    });
 
     setSessionCookie(res, token, SESSION_DAYS * 24 * 60 * 60);
-    res.json({ user: toUser(rows[0]) });
+    res.json({ user: toUser(user) });
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
@@ -228,7 +254,8 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 });
 
 app.post('/api/auth/logout', requireAuth, async (req, res) => {
-    await deleteRecord('sessions', { token: req.sessionToken });
+    const db = getDb();
+    await db.collection('sessions').deleteOne({ token: req.sessionToken });
     setSessionCookie(res, '', 0);
     res.json({ message: 'Signed out.' });
 });
@@ -243,20 +270,25 @@ app.get('/api/auth/roles', (req, res) => {
     });
 });
 
-// 1-Click Demo Role Switcher (Practical 9 viva & evaluation helper)
+// 1-Click Demo Role Switcher (Practical 10 viva & evaluation helper)
 app.post('/api/auth/switch-demo-role', async (req, res) => {
     const targetRole = req.body?.role;
     if (!ROLE_LIST.includes(targetRole)) throw new HttpError(400, 'Invalid role.');
 
-    const rows = await query('SELECT * FROM users WHERE role = ? ORDER BY id LIMIT 1', [targetRole]);
-    if (!rows.length) throw new HttpError(404, `No demo account found for role ${targetRole}.`);
+    const db = getDb();
+    const user = await db.collection('users').findOne({ role: targetRole });
+    if (!user) throw new HttpError(404, `No demo account found for role ${targetRole}.`);
 
-    const user = rows[0];
     const token = crypto.randomBytes(32).toString('hex');
-    await query('DELETE FROM sessions WHERE expires_at <= NOW()');
-    await query(
-        'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, NOW() + INTERVAL ? DAY)',
-        [token, user.id, SESSION_DAYS]);
+    const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+
+    await db.collection('sessions').deleteMany({ expires_at: { $lte: new Date() } });
+    await db.collection('sessions').insertOne({
+        token,
+        user_id: user._id,
+        created_at: new Date(),
+        expires_at: expiresAt
+    });
 
     setSessionCookie(res, token, SESSION_DAYS * 24 * 60 * 60);
     res.json({
@@ -266,19 +298,14 @@ app.post('/api/auth/switch-demo-role', async (req, res) => {
 });
 
 // =======================================================
-// COMPLAINT ROUTES — with RBAC checks
+// COMPLAINT ROUTES — with MongoDB & RBAC checks
 // =======================================================
 
-const COMPLAINT_COLUMNS = `
-    c.id, c.user_id, c.description, z.name AS zone_name, c.reporter_name, c.reporter_aadhar,
-    c.reporter_age, c.reporter_gender, c.reporter_residence, c.status, c.location_label,
-    c.latitude, c.longitude, c.image IS NOT NULL AS has_image, c.created_at, c.updated_at,
-    u.role AS creator_role, CONCAT(u.first_name, ' ', u.last_name) AS creator_name`;
-
-// Shape a DB row like the task objects the frontend renders
 function toTask(r) {
+    if (!r) return null;
+    const docId = r._id ? r._id.toString() : r.id;
     return {
-        id: r.id,
+        id: docId,
         text: r.description,
         area: r.zone_name,
         reporterDetails: {
@@ -288,45 +315,63 @@ function toTask(r) {
             gender: r.reporter_gender,
             residence: r.reporter_residence
         },
-        image: r.has_image ? `/api/complaints/${r.id}/image` : null,
+        image: r.has_image ? `/api/complaints/${docId}/image` : null,
         completed: r.status === 'resolved',
         status: r.status,
         location: r.location_label,
         coords: r.latitude != null ? { lat: Number(r.latitude), lng: Number(r.longitude) } : null,
-        createdBy: r.user_id,
+        createdBy: r.user_id ? r.user_id.toString() : null,
         creatorName: r.creator_name || null,
         creatorRole: r.creator_role || 'citizen',
-        createdAt: new Date(r.created_at).getTime()
+        createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now()
     };
 }
 
 async function getComplaint(id) {
-    const rows = await query(
-        `SELECT ${COMPLAINT_COLUMNS}
-         FROM complaints c
-         JOIN zones z ON z.id = c.zone_id
-         LEFT JOIN users u ON u.id = c.user_id
-         WHERE c.id = ?`, [id]);
-    if (!rows.length) throw new HttpError(404, 'Complaint not found.');
-    return rows[0];
+    const db = getDb();
+    const doc = await db.collection('complaints').findOne({ _id: toObjectId(id) });
+    if (!doc) throw new HttpError(404, 'Complaint not found.');
+    return doc;
 }
 
 app.get('/api/zones', requireAuth, async (req, res) => {
-    res.json(await selectAll('zones', { orderBy: 'id' }));
+    const db = getDb();
+    const zones = await db.collection('zones').find().sort({ name: 1 }).toArray();
+    res.json(zones.map(z => ({
+        id: z._id.toString(),
+        name: z.name,
+        lat: z.lat,
+        lng: z.lng
+    })));
 });
 
 // All authenticated users can view complaints feed
 app.get('/api/complaints', requireAuth, async (req, res) => {
-    const rows = await query(
-        `SELECT ${COMPLAINT_COLUMNS}
-         FROM complaints c
-         JOIN zones z ON z.id = c.zone_id
-         LEFT JOIN users u ON u.id = c.user_id
-         ORDER BY c.created_at DESC, c.id DESC`);
-    res.json(rows.map(toTask));
+    const db = getDb();
+    const rows = await db.collection('complaints').aggregate([
+        { $sort: { created_at: -1 } },
+        {
+            $lookup: {
+                from: 'users',
+                localField: 'user_id',
+                foreignField: '_id',
+                as: 'creator'
+            }
+        },
+        { $unwind: { path: '$creator', preserveNullAndEmptyArrays: true } }
+    ]).toArray();
+
+    res.json(rows.map(r => {
+        const enriched = {
+            ...r,
+            creator_name: r.creator ? `${r.creator.first_name} ${r.creator.last_name}` : null,
+            creator_role: r.creator ? r.creator.role : 'citizen'
+        };
+        return toTask(enriched);
+    }));
 });
 
-// All authenticated roles (Citizen, Officer, Admin) can create complaints
+// Create new complaint (stored in MongoDB)
 app.post('/api/complaints', requireAuth, requirePermission(PERMISSIONS.COMPLAINT_CREATE), upload.single('image'), async (req, res) => {
     const b = req.body || {};
     const text = String(b.text || '').trim();
@@ -342,42 +387,58 @@ app.post('/api/complaints', requireAuth, requirePermission(PERMISSIONS.COMPLAINT
     if (!Number.isInteger(age) || age < 1 || age > 120) throw new HttpError(400, 'Please enter a valid age.');
     if (!GENDERS.includes(gender)) throw new HttpError(400, 'Please select a gender.');
 
-    const zones = await query('SELECT * FROM zones WHERE name = ?', [String(b.area || '')]);
-    if (!zones.length) throw new HttpError(400, 'Please select a valid area.');
-    const zone = zones[0];
+    const db = getDb();
+    const zone = await db.collection('zones').findOne({ name: String(b.area || '') });
+    if (!zone) throw new HttpError(400, 'Please select a valid area.');
 
     const lat = parseFloat(b.lat);
     const lng = parseFloat(b.lng);
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
     const file = req.file;
 
-    const id = await transaction(async (q) => {
-        const result = await q(
-            `INSERT INTO complaints
-                (user_id, zone_id, description, reporter_name, reporter_aadhar, reporter_age,
-                 reporter_gender, reporter_residence, location_label, latitude, longitude,
-                 image, image_mime, image_name)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [req.user.id, zone.id, text, name, aadhar, age, gender, residence,
-             String(b.location || '').trim() || zone.name,
-             hasCoords ? lat : zone.lat, hasCoords ? lng : zone.lng,
-             file ? file.buffer : null, file ? file.mimetype : null, file ? file.originalname : null]);
-        await q(
-            `INSERT INTO complaint_status_history (complaint_id, old_status, new_status, changed_by, source)
-             VALUES (?, NULL, 'reported', ?, 'create')`, [result.insertId, req.user.id]);
-        return result.insertId;
+    const complaintDoc = {
+        user_id: req.user._id,
+        zone_id: zone._id,
+        zone_name: zone.name,
+        description: text,
+        reporter_name: name,
+        reporter_aadhar: aadhar,
+        reporter_age: age,
+        reporter_gender: gender,
+        reporter_residence: residence,
+        status: 'reported',
+        location_label: String(b.location || '').trim() || zone.name,
+        latitude: hasCoords ? lat : zone.lat,
+        longitude: hasCoords ? lng : zone.lng,
+        has_image: !!file,
+        image: file ? file.buffer : null,
+        image_mime: file ? file.mimetype : null,
+        image_name: file ? file.originalname : null,
+        created_at: new Date(),
+        updated_at: new Date()
+    };
+
+    const result = await db.collection('complaints').insertOne(complaintDoc);
+    await db.collection('complaint_status_history').insertOne({
+        complaint_id: result.insertedId,
+        old_status: null,
+        new_status: 'reported',
+        changed_by: req.user._id,
+        source: 'create',
+        changed_at: new Date()
     });
 
-    res.status(201).json(toTask(await getComplaint(id)));
+    const created = await getComplaint(result.insertedId);
+    res.status(201).json(toTask(created));
 });
 
-// Photo retrieval
+// Photo retrieval from MongoDB BSON storage
 app.get('/api/complaints/:id/image', requireAuth, async (req, res) => {
-    const rows = await query('SELECT image, image_mime FROM complaints WHERE id = ?', [req.params.id]);
-    if (!rows.length || !rows[0].image) throw new HttpError(404, 'Image not found.');
-    res.set('Content-Type', rows[0].image_mime || 'application/octet-stream');
+    const doc = await getComplaint(req.params.id);
+    if (!doc || !doc.image) throw new HttpError(404, 'Image not found.');
+    res.set('Content-Type', doc.image_mime || 'application/octet-stream');
     res.set('Cache-Control', 'private, max-age=86400');
-    res.send(rows[0].image);
+    res.send(doc.image.buffer || doc.image);
 });
 
 // RBAC Protected Status Updates: Only Officers and Admins can advance status on Kanban or List
@@ -386,40 +447,58 @@ app.patch('/api/complaints/:id/status', requireAuth, requireRole(ROLES.OFFICER, 
     const source = req.body?.source === 'kanban' ? 'kanban' : 'list';
     if (!STATUSES.includes(status)) throw new HttpError(400, 'Invalid status.');
 
-    await transaction(async (q) => {
-        const rows = await q('SELECT status FROM complaints WHERE id = ? FOR UPDATE', [req.params.id]);
-        if (!rows.length) throw new HttpError(404, 'Complaint not found.');
-        if (rows[0].status === status) return;
-
-        await q('UPDATE complaints SET status = ? WHERE id = ?', [status, req.params.id]);
-        await q(
-            `INSERT INTO complaint_status_history (complaint_id, old_status, new_status, changed_by, source)
-             VALUES (?, ?, ?, ?, ?)`, [req.params.id, rows[0].status, status, req.user.id, source]);
-    });
+    const db = getDb();
+    const existing = await getComplaint(req.params.id);
+    if (existing.status !== status) {
+        await db.collection('complaints').updateOne(
+            { _id: existing._id },
+            { $set: { status, updated_at: new Date() } }
+        );
+        await db.collection('complaint_status_history').insertOne({
+            complaint_id: existing._id,
+            old_status: existing.status,
+            new_status: status,
+            changed_by: req.user._id,
+            source,
+            changed_at: new Date()
+        });
+    }
 
     res.json(toTask(await getComplaint(req.params.id)));
 });
 
 // Complaint Status Audit Trail
 app.get('/api/complaints/:id/history', requireAuth, async (req, res) => {
-    const rows = await query(
-        `SELECT h.old_status, h.new_status, h.source, h.changed_at,
-                CONCAT(u.first_name, ' ', u.last_name) AS changed_by,
-                u.role AS changer_role
-         FROM complaint_status_history h
-         LEFT JOIN users u ON u.id = h.changed_by
-         WHERE h.complaint_id = ? ORDER BY h.changed_at DESC, h.id DESC`, [req.params.id]);
-    res.json(rows);
+    const db = getDb();
+    const rows = await db.collection('complaint_status_history').aggregate([
+        { $match: { complaint_id: toObjectId(req.params.id) } },
+        { $sort: { changed_at: -1 } },
+        {
+            $lookup: {
+                from: 'users',
+                localField: 'changed_by',
+                foreignField: '_id',
+                as: 'changer'
+            }
+        },
+        { $unwind: { path: '$changer', preserveNullAndEmptyArrays: true } }
+    ]).toArray();
+
+    res.json(rows.map(h => ({
+        old_status: h.old_status,
+        new_status: h.new_status,
+        source: h.source,
+        changed_at: h.changed_at,
+        changed_by: h.changer ? `${h.changer.first_name} ${h.changer.last_name}` : 'System',
+        changer_role: h.changer ? h.changer.role : 'system'
+    })));
 });
 
-// RBAC Protected Deletion:
-// - Admin: can delete any complaint
-// - Citizen: can delete ONLY their own reported complaint
-// - Officer: cannot delete complaints (preserves official audit records)
+// RBAC Protected Deletion
 app.delete('/api/complaints/:id', requireAuth, async (req, res) => {
     const complaint = await getComplaint(req.params.id);
     const userRole = req.user.role || ROLES.CITIZEN;
-    const isOwner = complaint.user_id === req.user.id;
+    const isOwner = complaint.user_id && complaint.user_id.toString() === req.user._id.toString();
 
     if (userRole === ROLES.ADMIN) {
         // Universal delete permission
@@ -431,8 +510,9 @@ app.delete('/api/complaints/:id', requireAuth, async (req, res) => {
         throw new HttpError(403, 'Access Denied: Field Officers cannot delete complaints. Contact an Administrator.');
     }
 
-    const deleted = await deleteRecord('complaints', { id: req.params.id });
-    if (!deleted) throw new HttpError(404, 'Complaint not found.');
+    const db = getDb();
+    await db.collection('complaints').deleteOne({ _id: complaint._id });
+    await db.collection('complaint_status_history').deleteMany({ complaint_id: complaint._id });
     res.json({ message: 'Complaint removed.' });
 });
 
@@ -442,17 +522,34 @@ app.delete('/api/complaints/:id', requireAuth, async (req, res) => {
 
 // List all registered system users and their roles
 app.get('/api/admin/users', requireAuth, requireRole(ROLES.ADMIN), async (req, res) => {
-    const rows = await query(
-        `SELECT u.id, u.first_name, u.last_name, u.mobile_number, u.aadhar_number,
-                u.email, u.role, u.address, u.created_at,
-                COUNT(c.id) AS complaints_count
-         FROM users u
-         LEFT JOIN complaints c ON c.user_id = u.id
-         GROUP BY u.id
-         ORDER BY u.id`
-    );
-    res.json(rows.map(r => ({
-        id: r.id,
+    const db = getDb();
+    const usersWithStats = await db.collection('users').aggregate([
+        {
+            $lookup: {
+                from: 'complaints',
+                localField: '_id',
+                foreignField: 'user_id',
+                as: 'userComplaints'
+            }
+        },
+        {
+            $project: {
+                first_name: 1,
+                last_name: 1,
+                email: 1,
+                mobile_number: 1,
+                aadhar_number: 1,
+                role: 1,
+                address: 1,
+                created_at: 1,
+                complaintsCount: { $size: '$userComplaints' }
+            }
+        },
+        { $sort: { _id: 1 } }
+    ]).toArray();
+
+    res.json(usersWithStats.map(r => ({
+        id: r._id.toString(),
         name: `${r.first_name} ${r.last_name}`,
         email: r.email,
         mobile: r.mobile_number,
@@ -460,48 +557,64 @@ app.get('/api/admin/users', requireAuth, requireRole(ROLES.ADMIN), async (req, r
         role: r.role,
         roleMeta: ROLE_METADATA[r.role] || ROLE_METADATA[ROLES.CITIZEN],
         address: r.address,
-        complaintsCount: Number(r.complaints_count || 0),
+        complaintsCount: Number(r.complaintsCount || 0),
         createdAt: r.created_at
     })));
 });
 
 // Update a user's role (Admin only)
 app.patch('/api/admin/users/:id/role', requireAuth, requireRole(ROLES.ADMIN), async (req, res) => {
-    const targetId = parseInt(req.params.id);
     const newRole = req.body?.role;
     if (!ROLE_LIST.includes(newRole)) throw new HttpError(400, 'Invalid role.');
 
-    const existing = await query('SELECT * FROM users WHERE id = ?', [targetId]);
-    if (!existing.length) throw new HttpError(404, 'User not found.');
+    const db = getDb();
+    const result = await db.collection('users').updateOne(
+        { _id: toObjectId(req.params.id) },
+        { $set: { role: newRole, updated_at: new Date() } }
+    );
+    if (result.matchedCount === 0) throw new HttpError(404, 'User not found.');
 
-    // Prevent demoting the last remaining admin
-    if (existing[0].role === ROLES.ADMIN && newRole !== ROLES.ADMIN) {
-        const [{ adminCount }] = await query("SELECT COUNT(*) AS adminCount FROM users WHERE role = 'admin'");
-        if (adminCount <= 1) {
-            throw new HttpError(400, 'Cannot demote the only remaining Administrator.');
-        }
-    }
-
-    await query('UPDATE users SET role = ? WHERE id = ?', [newRole, targetId]);
-    const [updated] = await query('SELECT * FROM users WHERE id = ?', [targetId]);
-    res.json({
-        message: `Role for ${updated.email} updated to ${newRole}`,
-        user: toUser(updated)
-    });
+    res.json({ message: `Role updated to ${ROLE_METADATA[newRole].name}.` });
 });
 
-// Recent system audit log
+// System Audit Logs (Admin only)
 app.get('/api/admin/audit', requireAuth, requireRole(ROLES.ADMIN), async (req, res) => {
-    const rows = await query(
-        `SELECT h.id, h.complaint_id, c.description, h.old_status, h.new_status, h.source, h.changed_at,
-                CONCAT(u.first_name, ' ', u.last_name) AS actor_name, u.email AS actor_email, u.role AS actor_role
-         FROM complaint_status_history h
-         JOIN complaints c ON c.id = h.complaint_id
-         LEFT JOIN users u ON u.id = h.changed_by
-         ORDER BY h.changed_at DESC, h.id DESC
-         LIMIT 50`
-    );
-    res.json(rows);
+    const db = getDb();
+    const rows = await db.collection('complaint_status_history').aggregate([
+        { $sort: { changed_at: -1 } },
+        { $limit: 50 },
+        {
+            $lookup: {
+                from: 'complaints',
+                localField: 'complaint_id',
+                foreignField: '_id',
+                as: 'complaint'
+            }
+        },
+        { $unwind: { path: '$complaint', preserveNullAndEmptyArrays: true } },
+        {
+            $lookup: {
+                from: 'users',
+                localField: 'changed_by',
+                foreignField: '_id',
+                as: 'actor'
+            }
+        },
+        { $unwind: { path: '$actor', preserveNullAndEmptyArrays: true } }
+    ]).toArray();
+
+    res.json(rows.map(h => ({
+        id: h._id.toString(),
+        complaint_id: h.complaint_id ? h.complaint_id.toString() : null,
+        description: h.complaint ? h.complaint.description : 'Complaint deleted',
+        old_status: h.old_status,
+        new_status: h.new_status,
+        source: h.source,
+        changed_at: h.changed_at,
+        actor_name: h.actor ? `${h.actor.first_name} ${h.actor.last_name}` : 'System',
+        actor_email: h.actor ? h.actor.email : null,
+        actor_role: h.actor ? h.actor.role : 'system'
+    })));
 });
 
 // =======================================================
@@ -509,7 +622,6 @@ app.get('/api/admin/audit', requireAuth, requireRole(ROLES.ADMIN), async (req, r
 // =======================================================
 const MONGO_COLLECTION = 'civic_complaints';
 
-// Ensure MongoDB is connected for Mongo API routes
 async function ensureMongo(req, res, next) {
     try {
         await connectMongo();
@@ -572,7 +684,7 @@ app.post('/api/mongo/complaints/batch', ensureMongo, async (req, res) => {
 // 5. UPDATE (BY ID)
 app.patch('/api/mongo/complaints/:id', ensureMongo, async (req, res) => {
     const updates = req.body || {};
-    delete updates._id; // Prevent updating immutable _id
+    delete updates._id;
     const result = await mongoUpdateById(MONGO_COLLECTION, req.params.id, updates);
     if (result.matchedCount === 0) throw new HttpError(404, 'MongoDB complaint not found.');
     const updated = await mongoReadById(MONGO_COLLECTION, req.params.id);
@@ -613,7 +725,7 @@ app.use(express.static(__dirname, { dotfiles: 'ignore', index: false }));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Endpoint not found.' }));
 
-// Central error handler (Express 5 forwards rejected async handlers here)
+// Central error handler
 app.use((err, req, res, next) => {
     if (err instanceof multer.MulterError) {
         return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Image must be 5 MB or smaller.' : err.message });
@@ -624,15 +736,14 @@ app.use((err, req, res, next) => {
 });
 
 // =======================================================
-// START SERVER
+// START SERVER (POWERED BY MONGODB)
 // =======================================================
 
-initDatabase({ log: msg => console.log('[db] ' + msg) })
-    .then(conn => closeConnection(conn, () => {}))
+initDatabase({ log: msg => console.log('[mongodb] ' + msg) })
     .then(() => {
-        app.listen(PORT, () => console.log(`CivicGrid running at http://localhost:${PORT}`));
+        app.listen(PORT, () => console.log(`CivicGrid (MongoDB) running at http://localhost:${PORT}`));
     })
     .catch(err => {
-        console.error(explainDbError(err));
+        console.error(explainMongoError(err));
         process.exit(1);
     });

@@ -1,7 +1,7 @@
 {
   "name": "civicgrid",
   "version": "1.0.0",
-  "description": "CivicGrid - area-wise civic complaint manager (Node.js + Express + MySQL)",
+  "description": "CivicGrid - area-wise civic complaint manager (Node.js + Express + MongoDB)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -1,15 +1,15 @@
 /*
- * Practical - 9: Role-Based Authentication and Access Control (RBAC) Demo
+ * Practical - 10: Role-Based Authentication and Access Control (RBAC) Demo on MongoDB
  * Demonstrates:
  *   1. Role Hierarchy and Permissions Matrix in JavaScript
  *   2. Policy enforcement (ALLOW vs 403 FORBIDDEN)
- *   3. Database verification of user roles & dynamic role elevation
+ *   3. Live MongoDB verification of user roles & dynamic role elevation
  *
  * Run:  npm run rbac-demo   (or: node connection/rbac-demo.js)
  */
 
 const { initDatabase, closeConnection } = require('./setup');
-const { query, closePool } = require('./db');
+const { getDb, closeMongo } = require('./mongo-db');
 const {
     ROLES,
     ROLE_LIST,
@@ -18,7 +18,7 @@ const {
     ROLE_METADATA,
     hasPermission
 } = require('./rbac');
-const { explainDbError } = require('./config');
+const { explainMongoError } = require('./mongo-config');
 
 function evaluateAccess(user, action, context = {}) {
     const role = user?.role || ROLES.CITIZEN;
@@ -80,7 +80,7 @@ function evaluateAccess(user, action, context = {}) {
 
 async function main() {
     console.log('================================================================');
-    console.log('   PRACTICAL - 9: ROLE-BASED ACCESS CONTROL (RBAC) DEMO');
+    console.log('   PRACTICAL - 10: RBAC ACCESS CONTROL DEMO ON MONGODB');
     console.log('================================================================\n');
 
     // 1. Roles & Hierarchy Overview
@@ -129,42 +129,41 @@ async function main() {
     });
     console.table(scenarioResults);
 
-    // 4. Live MySQL Database Verification
-    console.log('\n--- 4. LIVE MYSQL DATABASE USER ROLES ---');
-    const setupConn = await initDatabase();
-    await closeConnection(setupConn, () => {});
+    // 4. Live MongoDB Database Verification
+    console.log('\n--- 4. LIVE MONGODB DATABASE USER ROLES ---');
+    const db = await initDatabase();
 
-    const users = await query('SELECT id, first_name, last_name, email, role, created_at FROM users ORDER BY id');
+    const users = await db.collection('users').find().sort({ _id: 1 }).toArray();
     console.table(users.map(u => ({
-        ID: u.id,
+        ID: u._id.toString().slice(-8),
         Name: `${u.first_name} ${u.last_name}`,
         Email: u.email,
         Role: u.role.toUpperCase(),
         Registered: new Date(u.created_at).toLocaleDateString()
     })));
 
-    // 5. Dynamic Role Elevation Demo
+    // 5. Dynamic Role Elevation Demo on MongoDB
     console.log('\n--- 5. DYNAMIC ROLE ELEVATION (ADMIN ACTION) ---');
     const targetUser = users.find(u => u.role === ROLES.CITIZEN);
     if (targetUser) {
         console.log(`Original state: ${targetUser.email} has role '${targetUser.role}'`);
-        await query('UPDATE users SET role = ? WHERE id = ?', [ROLES.OFFICER, targetUser.id]);
-        const [elevated] = await query('SELECT email, role FROM users WHERE id = ?', [targetUser.id]);
+        await db.collection('users').updateOne({ _id: targetUser._id }, { $set: { role: ROLES.OFFICER } });
+        const elevated = await db.collection('users').findOne({ _id: targetUser._id });
         console.log(`Elevated state: ${elevated.email} promoted to role '${elevated.role}'`);
 
         // Revert back so demo stays consistent
-        await query('UPDATE users SET role = ? WHERE id = ?', [ROLES.CITIZEN, targetUser.id]);
+        await db.collection('users').updateOne({ _id: targetUser._id }, { $set: { role: ROLES.CITIZEN } });
         console.log(`Reset state:    ${elevated.email} restored to role '${ROLES.CITIZEN}'`);
     }
 
     console.log('\n================================================================');
-    console.log('   RBAC DEMONSTRATION COMPLETE');
+    console.log('   RBAC DEMONSTRATION COMPLETE ON MONGODB');
     console.log('================================================================');
 }
 
 main()
     .catch(err => {
-        console.error(explainDbError(err));
+        console.error(explainMongoError(err));
         process.exitCode = 1;
     })
-    .finally(() => closePool().then(() => console.log('Database pool connection closed.')));
+    .finally(() => closeMongo().then(() => console.log('MongoDB connection closed.')));
