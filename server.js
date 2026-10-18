@@ -270,32 +270,6 @@ app.get('/api/auth/roles', (req, res) => {
     });
 });
 
-// 1-Click Demo Role Switcher (Practical 10 viva & evaluation helper)
-app.post('/api/auth/switch-demo-role', async (req, res) => {
-    const targetRole = req.body?.role;
-    if (!ROLE_LIST.includes(targetRole)) throw new HttpError(400, 'Invalid role.');
-
-    const db = getDb();
-    const user = await db.collection('users').findOne({ role: targetRole });
-    if (!user) throw new HttpError(404, `No demo account found for role ${targetRole}.`);
-
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-
-    await db.collection('sessions').deleteMany({ expires_at: { $lte: new Date() } });
-    await db.collection('sessions').insertOne({
-        token,
-        user_id: user._id,
-        created_at: new Date(),
-        expires_at: expiresAt
-    });
-
-    setSessionCookie(res, token, SESSION_DAYS * 24 * 60 * 60);
-    res.json({
-        message: `Active session switched to ${ROLE_METADATA[targetRole].name}`,
-        user: toUser(user)
-    });
-});
 
 // =======================================================
 // COMPLAINT ROUTES — with MongoDB & RBAC checks
@@ -575,6 +549,28 @@ app.patch('/api/admin/users/:id/role', requireAuth, requireRole(ROLES.ADMIN), as
     if (result.matchedCount === 0) throw new HttpError(404, 'User not found.');
 
     res.json({ message: `Role updated to ${ROLE_METADATA[newRole].name}.` });
+});
+
+// Delete a user and their associated data (Admin only)
+app.delete('/api/admin/users/:id', requireAuth, requireRole(ROLES.ADMIN), async (req, res) => {
+    const targetId = toObjectId(req.params.id);
+    if (!targetId) throw new HttpError(400, 'Invalid user ID.');
+
+    // Safety: Admin cannot delete themselves
+    if (req.user._id.toString() === targetId.toString()) {
+        throw new HttpError(400, 'Access Denied: You cannot delete your own Administrator account.');
+    }
+
+    const db = getDb();
+    const user = await db.collection('users').findOne({ _id: targetId });
+    if (!user) throw new HttpError(404, 'User not found.');
+
+    // Clean up user sessions, complaints, and user record
+    await db.collection('sessions').deleteMany({ user_id: targetId });
+    await db.collection('complaints').deleteMany({ user_id: targetId });
+    await db.collection('users').deleteOne({ _id: targetId });
+
+    res.json({ message: `User "${user.first_name} ${user.last_name}" (${user.email}) has been permanently deleted.` });
 });
 
 // System Audit Logs (Admin only)

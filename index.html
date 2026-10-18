@@ -112,7 +112,7 @@
 
         <!-- RBAC Session Header with Role Badge + Role Switcher -->
         <div id="userHeader" class="bg-orange-50/80 rounded-2xl border border-orange-200 text-sm overflow-hidden">
-            <!-- Row 1: Welcome + Role Badge + Sign Out -->
+            <!-- User Info: Welcome + Role Badge + Sign Out -->
             <div class="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div class="flex items-center gap-3 flex-wrap">
                     <span id="welcomeMessage" class="font-bold text-brand-700">Welcome!</span>
@@ -121,24 +121,6 @@
                 <button onclick="signOut()" class="px-4 py-2 text-xs font-bold rounded-xl bg-red-600 text-white hover:bg-red-700 transition active:scale-95 shadow-sm">
                     Sign Out
                 </button>
-            </div>
-
-            <!-- Row 2: Live Role Switcher (1-click demo switch without re-login) -->
-            <div class="flex flex-wrap items-center gap-2 px-4 pb-4 pt-1 border-t border-orange-200/60">
-                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1">⚡ Switch Role:</span>
-                <button onclick="switchDemoRole('citizen')" id="switchCitizen"
-                    class="role-switcher-btn px-3 py-1.5 rounded-lg bg-white border border-sky-200 text-sky-700 text-[11px] font-bold hover:bg-sky-50 active:scale-95">
-                    👤 Citizen
-                </button>
-                <button onclick="switchDemoRole('officer')" id="switchOfficer"
-                    class="role-switcher-btn px-3 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-700 text-[11px] font-bold hover:bg-amber-50 active:scale-95">
-                    🛡️ Officer
-                </button>
-                <button onclick="switchDemoRole('admin')" id="switchAdmin"
-                    class="role-switcher-btn px-3 py-1.5 rounded-lg bg-white border border-purple-200 text-purple-700 text-[11px] font-bold hover:bg-purple-50 active:scale-95">
-                    👑 Admin
-                </button>
-                <span id="roleDescription" class="text-[11px] text-slate-400 ml-auto hidden sm:inline"></span>
             </div>
         </div>
 
@@ -345,29 +327,6 @@
             }
         }
 
-        // 1-Click Role Switcher — switches the entire session to a demo role account
-        async function switchDemoRole(role) {
-            try {
-                const res = await fetch('/api/auth/switch-demo-role', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ role })
-                });
-                const data = await res.json();
-                if (res.ok) {
-                    showToast(`⚡ Switched to ${data.user.roleMeta.badge}`);
-                    applyUserSession(data.user);
-                    await loadTasks();
-                    render();
-                } else {
-                    showToast(`⚠️ ${data.error}`);
-                }
-            } catch (err) {
-                showToast('⚠️ Could not switch role.');
-            }
-        }
-
         // Apply user data and RBAC permissions to the entire UI
         function applyUserSession(user) {
             currentUser = user;
@@ -382,19 +341,6 @@
             const badge = document.getElementById('roleBadge');
             badge.innerText = meta.badge || '👤 Citizen';
             badge.className = `role-badge-${role} px-3 py-1 rounded-full text-xs font-extrabold tracking-wide shadow-sm`;
-
-            // Role description
-            document.getElementById('roleDescription').innerText = meta.description || '';
-
-            // Highlight active role switcher button
-            ['Citizen', 'Officer', 'Admin'].forEach(r => {
-                const btn = document.getElementById('switch' + r);
-                if (btn) {
-                    btn.classList.toggle('ring-2', r.toLowerCase() === role);
-                    btn.classList.toggle('ring-offset-1', r.toLowerCase() === role);
-                    btn.classList.toggle('font-extrabold', r.toLowerCase() === role);
-                }
-            });
 
             // Prefill reporter fields
             document.getElementById('reporterName').value = user.firstName + ' ' + (user.lastName || '');
@@ -504,12 +450,17 @@
                                             <span class="role-badge-${u.role} px-2 py-0.5 rounded-full text-[10px] font-bold">${u.roleMeta?.badge || u.role}</span>
                                         </td>
                                         <td class="px-3 py-2 text-center font-bold text-slate-600">${u.complaintsCount}</td>
-                                        <td class="px-3 py-2 text-center">
-                                            <select onchange="changeUserRole(${u.id}, this.value)" class="text-[11px] px-2 py-1 rounded-lg border border-purple-200 bg-white text-purple-700 font-bold">
+                                        <td class="px-3 py-2 text-center whitespace-nowrap">
+                                            <select onchange="changeUserRole('${u.id}', this.value)" class="text-[11px] px-2 py-1 rounded-lg border border-purple-200 bg-white text-purple-700 font-bold">
                                                 <option value="citizen" ${u.role === 'citizen' ? 'selected' : ''}>👤 Citizen</option>
                                                 <option value="officer" ${u.role === 'officer' ? 'selected' : ''}>🛡️ Officer</option>
                                                 <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin</option>
                                             </select>
+                                            ${u.id === currentUser?.id ? '' : `
+                                            <button onclick="deleteUser('${u.id}', '${escapeHtml(u.name)}')" class="ml-1.5 px-2 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition font-bold text-[10px]" title="Delete this user account">
+                                                🗑️ Delete
+                                            </button>
+                                            `}
                                         </td>
                                     </tr>
                                 `).join('')}
@@ -541,6 +492,28 @@
                 }
             } catch (err) {
                 showToast('⚠️ Could not update role.');
+            }
+        }
+
+        // Admin: Permanently delete a user account
+        async function deleteUser(userId, userName) {
+            if (!confirm(`Are you sure you want to permanently delete user "${userName}" and all their complaints?`)) return;
+            try {
+                const res = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(`✅ ${data.message}`);
+                    loadAdminUsers();
+                    await loadTasks();
+                    render();
+                } else {
+                    showToast(`⚠️ ${data.error}`);
+                }
+            } catch (err) {
+                showToast('⚠️ Could not delete user.');
             }
         }
 
